@@ -1,6 +1,6 @@
 # Swing Bot
 
-A NautilusTrader `1.231.0` hourly SMA continuation strategy for a fixed US-stock universe (see config/universe.toml),
+A NautilusTrader `1.231.0` hourly SMA continuation strategy for a fixed US-stock universe (see [config/universe.toml](config/universe.toml)),
 with Interactive Brokers contract discovery, historical data ingestion, backtesting,
 paper trading, and explicitly gated live trading.
 
