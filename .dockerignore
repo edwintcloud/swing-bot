@@ -1,0 +1,15 @@
+.env
+.git
+.gitignore
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+*.pyc
+data
+logs
+reports
+runtime
+secrets
+tests
+tools

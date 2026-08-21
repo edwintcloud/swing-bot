@@ -1,0 +1,5 @@
+fast_sma_period = 20
+slow_sma_period = 100
+sma_separation_fraction = 0.05
+crossover_fraction = 0.01
+trailing_stop_fraction = 0.05

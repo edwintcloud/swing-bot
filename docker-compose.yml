@@ -1,0 +1,106 @@
+name: swing-bot
+
+services:
+  ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    restart: unless-stopped
+    environment:
+      VNC_SERVER_PASSWORD: ${VNC_SERVER_PASSWORD:?Set VNC_SERVER_PASSWORD in .env}
+      AUTO_RESTART_TIME: 11:59 PM
+      TWS_USERID: ${TWS_USERID:?Set TWS_USERID in .env}
+      TWS_PASSWORD_FILE: /run/secrets/tws_password
+      TRADING_MODE: paper
+      READ_ONLY_API: no
+      TWS_ACCEPT_INCOMING: accept
+      TWOFA_TIMEOUT_ACTION: restart
+      RELOGIN_AFTER_TWOFA_TIMEOUT: yes
+      EXISTING_SESSION_DETECTED_ACTION: primary
+      ALLOW_BLIND_TRADING: no
+      TIME_ZONE: America/New_York
+    ports:
+      - "127.0.0.1:5900:5900" # VNC port for debugging
+      - "127.0.0.1:4002:4004"
+    secrets:
+      - tws_password
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/4004'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      ib-gateway:
+        condition: service_healthy
+    command: ["paper", "--contracts", "/app/data/contracts.json"]
+    environment:
+      TRADING_MODE: paper
+      TWS_ACCOUNT: ${TWS_ACCOUNT:?Set TWS_ACCOUNT in .env}
+      IB_HOST: ib-gateway
+      IB_PORT: 4004
+      IB_DATA_CLIENT_ID: ${IB_DATA_CLIENT_ID:-20}
+      IB_EXEC_CLIENT_ID: ${IB_EXEC_CLIENT_ID:-30}
+      DASHBOARD_RUNTIME_PATH: /app/runtime
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./config:/app/config:ro
+      - ./data/contracts.json:/app/data/contracts.json:ro
+      - ./logs:/app/logs
+      - ./runtime:/app/runtime
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      bot:
+        condition: service_healthy
+    command: ["dashboard", "--runtime-dir", "/app/runtime", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
+    ports:
+      - "80:8080"
+    volumes:
+      - ./runtime:/app/runtime
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+secrets:
+  tws_password:
+    file: ./secrets/tws_password.txt

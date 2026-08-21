@@ -1,0 +1,15 @@
+.venv/
+.env
+*.pyc
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+catalog/
+reports/
+logs/
+runtime/
+secrets/
+!secrets/
+secrets/*
+!secrets/README.md
+data/

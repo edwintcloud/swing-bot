@@ -1,0 +1,21 @@
+services:
+  ib-gateway:
+    environment:
+      TRADING_MODE: live
+    ports: !override
+      - "127.0.0.1:4001:4003"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/4003'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  bot:
+    command: ["live", "--contracts", "/app/data/contracts.json"]
+    environment:
+      TRADING_MODE: live
+      TWS_ACCOUNT: ${TWS_ACCOUNT:?Set a live TWS_ACCOUNT}
+      IB_HOST: ib-gateway
+      IB_PORT: 4003
+      LIVE_TRADING_ACK: ${LIVE_TRADING_ACK:?Set LIVE_TRADING_ACK}
