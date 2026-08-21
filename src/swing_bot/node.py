@@ -29,7 +29,11 @@ from nautilus_trader.live.node import TradingNode
 from swing_bot.backtest import strategy_import_config
 from swing_bot.config import RiskSettings, StrategySettings
 from swing_bot.contracts import ResolvedContract
-from swing_bot.telegram import bot_disconnected_message, telegram_notifier
+from swing_bot.telegram import (
+    bot_disconnected_message,
+    bot_reconnected_message,
+    telegram_notifier,
+)
 
 LIVE_ACKNOWLEDGEMENT = "I_UNDERSTAND_LIVE_ORDERS_ARE_REAL"
 
@@ -172,6 +176,7 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
         if ib_client is None:
             continue
         original = ib_client.process_error
+        connection_state = {"disconnected": False}
 
         async def process_error(
             self: Any,
@@ -182,14 +187,20 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
             error_string: str,
             advanced_order_reject_json: str = "",
             _original: Any = original,
+            _state: dict[str, bool] = connection_state,
         ) -> None:
             full_disconnect = error_code in {1100, 1300, 2110}
             data_disconnect = error_code in {2103, 10182}
             different_ip = error_code == 162 and "different IP address" in error_string
-            if full_disconnect or data_disconnect or different_ip:
+            reconnected = error_code in {1101, 1102, 2104, 2106}
+            if (full_disconnect or data_disconnect or different_ip) and not _state["disconnected"]:
+                _state["disconnected"] = True
                 notifier.send(
                     bot_disconnected_message(mode, f"IB {error_code}: {error_string}")
                 )
+            elif reconnected and _state["disconnected"]:
+                _state["disconnected"] = False
+                notifier.send(bot_reconnected_message(mode, f"IB {error_code}: {error_string}"))
             await _original(
                 req_id=req_id,
                 error_time=error_time,

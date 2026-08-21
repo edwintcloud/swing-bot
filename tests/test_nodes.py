@@ -22,7 +22,7 @@ CONTRACT = ResolvedContract("MU", "MU.NASDAQ", 123, "NASDAQ")
 
 
 class NodeConfigTests(unittest.TestCase):
-    def test_ib_disconnect_errors_are_notified_and_still_processed(self) -> None:
+    def test_ib_disconnect_and_reconnect_are_notified_and_still_processed(self) -> None:
         calls: list[int] = []
         messages: list[str] = []
 
@@ -47,10 +47,52 @@ class NodeConfigTests(unittest.TestCase):
                 error_string="Connectivity lost",
             )
         )
+        run(
+            ib_client.process_error(
+                req_id=-1,
+                error_time=1,
+                error_code=1101,
+                error_string="Connectivity restored - data lost",
+            )
+        )
 
-        self.assertEqual(calls, [1100])
+        self.assertEqual(calls, [1100, 1101])
         self.assertIn("Mode: PAPER", messages[0])
         self.assertIn("IB 1100: Connectivity lost", messages[0])
+        self.assertIn("Bot reconnected", messages[1])
+        self.assertIn("IB 1101: Connectivity restored - data lost", messages[1])
+
+    def test_ib_recovery_without_prior_disconnect_is_not_notified(self) -> None:
+        messages: list[str] = []
+
+        class FakeIbClient:
+            async def process_error(self, **_kwargs: object) -> None:
+                pass
+
+        ib_client = FakeIbClient()
+        node = SimpleNamespace(
+            kernel=SimpleNamespace(
+                data_engine=SimpleNamespace(
+                    _clients={"IB": SimpleNamespace(_client=ib_client)}
+                )
+            )
+        )
+        with patch(
+            "swing_bot.node.telegram_notifier",
+            return_value=SimpleNamespace(send=messages.append),
+        ):
+            install_ib_error_notifications(node, "live")
+
+        run(
+            ib_client.process_error(
+                req_id=-1,
+                error_time=0,
+                error_code=2104,
+                error_string="Market data farm connection is OK",
+            )
+        )
+
+        self.assertEqual(messages, [])
 
     def test_report_writer_emits_summary(self) -> None:
         result = BacktestResult(

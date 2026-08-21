@@ -68,6 +68,10 @@ def bot_disconnected_message(mode: str, reason: str) -> str:
     return f"Bot disconnected\nMode: {mode.upper()}\nReason: {reason}"
 
 
+def bot_reconnected_message(mode: str, reason: str) -> str:
+    return f"Bot reconnected\nMode: {mode.upper()}\nReason: {reason}"
+
+
 def _post_message(token: str, chat_id: str, text: str, timeout: float) -> None:
     request = Request(
         f"https://api.telegram.org/bot{token}/sendMessage",

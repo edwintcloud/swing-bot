@@ -3,6 +3,7 @@ import unittest
 from swing_bot.telegram import (
     TelegramNotifier,
     bot_disconnected_message,
+    bot_reconnected_message,
     bot_started_message,
     bot_stopped_message,
     trade_closed_message,
@@ -31,6 +32,10 @@ class TelegramMessageTests(unittest.TestCase):
         self.assertIn(
             "Reason: IB 1100: Connectivity lost",
             bot_disconnected_message("paper", "IB 1100: Connectivity lost"),
+        )
+        self.assertIn(
+            "Reason: IB 1101: Connectivity restored",
+            bot_reconnected_message("paper", "IB 1101: Connectivity restored"),
         )
 
     def test_notifier_sends_on_worker_and_contains_transport_errors(self) -> None:
