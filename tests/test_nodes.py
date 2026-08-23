@@ -94,6 +94,48 @@ class NodeConfigTests(unittest.TestCase):
 
         self.assertEqual(messages, [])
 
+    def test_ib_market_data_farm_cycle_is_not_notified(self) -> None:
+        calls: list[int] = []
+        messages: list[str] = []
+
+        class FakeIbClient:
+            async def process_error(self, **kwargs: object) -> None:
+                calls.append(int(kwargs["error_code"]))
+
+        ib_client = FakeIbClient()
+        node = SimpleNamespace(
+            kernel=SimpleNamespace(
+                data_engine=SimpleNamespace(
+                    _clients={"IB": SimpleNamespace(_client=ib_client)}
+                )
+            )
+        )
+        with patch(
+            "swing_bot.node.telegram_notifier",
+            return_value=SimpleNamespace(send=messages.append),
+        ):
+            install_ib_error_notifications(node, "paper")
+
+        run(
+            ib_client.process_error(
+                req_id=-1,
+                error_time=0,
+                error_code=2103,
+                error_string="Market data farm connection is broken",
+            )
+        )
+        run(
+            ib_client.process_error(
+                req_id=-1,
+                error_time=1,
+                error_code=2104,
+                error_string="Market data farm connection is OK",
+            )
+        )
+
+        self.assertEqual(calls, [2103, 2104])
+        self.assertEqual(messages, [])
+
     def test_report_writer_emits_summary(self) -> None:
         result = BacktestResult(
             "BACKTEST-001", "host", None, "instance", "run", 1, 2, 1, 2, 1.0, 1, 2, 0, 0, {}, {}, {}

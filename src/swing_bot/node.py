@@ -190,10 +190,8 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
             _state: dict[str, bool] = connection_state,
         ) -> None:
             full_disconnect = error_code in {1100, 1300, 2110}
-            data_disconnect = error_code in {2103, 10182}
-            different_ip = error_code == 162 and "different IP address" in error_string
-            reconnected = error_code in {1101, 1102, 2104, 2106}
-            if (full_disconnect or data_disconnect or different_ip) and not _state["disconnected"]:
+            reconnected = error_code in {1101, 1102}
+            if full_disconnect and not _state["disconnected"]:
                 _state["disconnected"] = True
                 notifier.send(
                     bot_disconnected_message(mode, f"IB {error_code}: {error_string}")
