@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -36,6 +37,19 @@ from swing_bot.telegram import (
 )
 
 LIVE_ACKNOWLEDGEMENT = "I_UNDERSTAND_LIVE_ORDERS_ARE_REAL"
+IB_DIFFERENT_IP_RETRY_SECONDS = 300
+IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS = 5
+
+
+async def _retry_ib_market_data(ib_client: Any, state: dict[str, Any]) -> None:
+    try:
+        while state["blocked"] and not getattr(ib_client, "_is_shutting_down", False):
+            await asyncio.sleep(IB_DIFFERENT_IP_RETRY_SECONDS)
+            state["blocked"] = False
+            await ib_client._resubscribe_all()
+            await asyncio.sleep(IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS)
+    finally:
+        state["task"] = None
 
 
 @dataclass(frozen=True)
@@ -168,8 +182,6 @@ def build_trading_node(config: TradingNodeConfig) -> TradingNode:
 
 def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
     notifier = telegram_notifier()
-    if notifier is None:
-        return
     clients = node.kernel.data_engine._clients.values()
     for data_client in clients:
         ib_client = getattr(data_client, "_client", None)
@@ -177,6 +189,7 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
             continue
         original = ib_client.process_error
         connection_state = {"disconnected": False}
+        different_ip_state: dict[str, Any] = {"blocked": False, "task": None}
 
         async def process_error(
             self: Any,
@@ -188,17 +201,22 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
             advanced_order_reject_json: str = "",
             _original: Any = original,
             _state: dict[str, bool] = connection_state,
+            _different_ip_state: dict[str, Any] = different_ip_state,
         ) -> None:
             full_disconnect = error_code in {1100, 1300, 2110}
             reconnected = error_code in {1101, 1102}
             if full_disconnect and not _state["disconnected"]:
                 _state["disconnected"] = True
-                notifier.send(
-                    bot_disconnected_message(mode, f"IB {error_code}: {error_string}")
-                )
+                if notifier is not None:
+                    notifier.send(
+                        bot_disconnected_message(mode, f"IB {error_code}: {error_string}")
+                    )
             elif reconnected and _state["disconnected"]:
                 _state["disconnected"] = False
-                notifier.send(bot_reconnected_message(mode, f"IB {error_code}: {error_string}"))
+                if notifier is not None:
+                    notifier.send(
+                        bot_reconnected_message(mode, f"IB {error_code}: {error_string}")
+                    )
             await _original(
                 req_id=req_id,
                 error_time=error_time,
@@ -206,5 +224,15 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
                 error_string=error_string,
                 advanced_order_reject_json=advanced_order_reject_json,
             )
+            different_ip = (
+                error_code == 162 and "different IP address" in error_string
+            )
+            if different_ip:
+                _different_ip_state["blocked"] = True
+                task = _different_ip_state["task"]
+                if task is None or task.done():
+                    _different_ip_state["task"] = self._create_task(
+                        _retry_ib_market_data(self, _different_ip_state)
+                    )
 
         ib_client.process_error = MethodType(process_error, ib_client)
