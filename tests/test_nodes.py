@@ -219,6 +219,7 @@ class NodeConfigTests(unittest.TestCase):
             strategy_config["signal_bar_types"],
             ("MU.NASDAQ-1-MINUTE-LAST-EXTERNAL",),
         )
+        self.assertIsNone(strategy_config["external_order_claims"])
         self.assertTrue(strategy_config["aggregate_hourly_from_minutes"])
         self.assertEqual(
             strategy_config["trade_start_ns"],
@@ -260,6 +261,7 @@ class NodeConfigTests(unittest.TestCase):
         )
         self.assertTrue(strategy_config["use_broker_equity"])
         self.assertFalse(strategy_config["aggregate_hourly_from_minutes"])
+        self.assertEqual(strategy_config["external_order_claims"], ("MU.NASDAQ",))
         self.assertEqual(strategy_config["dashboard_runtime_path"], "/app/runtime")
         self.assertEqual(config.risk_engine.max_notional_per_order, {})
 

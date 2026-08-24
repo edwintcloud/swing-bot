@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from swing_bot.dashboard import INDEX_HTML
 from swing_bot.dashboard_bridge import DashboardBridge, dashboard_payload, enqueue_command
 
 
@@ -38,6 +39,15 @@ class DashboardBridgeTests(unittest.TestCase):
             (path / "bad.json").write_text("not-json", encoding="ascii")
             self.assertEqual(DashboardBridge(directory).read_commands(), ())
             self.assertFalse((path / "bad.json").exists())
+
+    def test_position_flatten_control_targets_one_instrument(self) -> None:
+        self.assertIn('data-instrument="${esc(p.instrument_id)}"', INDEX_HTML)
+        self.assertIn("command('/api/flatten',{instrument_id:b.dataset.instrument})", INDEX_HTML)
+        with TemporaryDirectory() as directory:
+            enqueue_command(directory, "flatten", {"instrument_id": "NBIS.NASDAQ"})
+            command = DashboardBridge(directory).read_commands()[0]
+            self.assertEqual(command.action, "flatten")
+            self.assertEqual(command.payload, {"instrument_id": "NBIS.NASDAQ"})
 
 
 if __name__ == "__main__":

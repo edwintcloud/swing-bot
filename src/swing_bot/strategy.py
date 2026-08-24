@@ -30,7 +30,7 @@ from swing_bot.telegram import telegram_notifier, trade_closed_message, trade_en
 
 HOUR_NS = 3_600_000_000_000
 DASHBOARD_TIMER = "dashboard-state"
-FLATTEN_LIMIT_OFFSET = 0.05
+FLATTEN_LIMIT_OFFSET = 0.01
 
 
 @dataclass(frozen=True)
@@ -75,17 +75,18 @@ def build_flatten_plan(*, is_long: bool, mark_price: float) -> FlattenPlan:
     return FlattenPlan(OrderSide.BUY, mark_price * (1.0 + FLATTEN_LIMIT_OFFSET))
 
 
-def dashboard_position(position: Any, mark_price: float) -> dict[str, Any]:
+def dashboard_position(position: Any, mark_price: float | None) -> dict[str, Any]:
     quantity = position.quantity.as_double()
     direction = 1.0 if position.is_long else -1.0
+    effective_mark = position.avg_px_open if mark_price is None else mark_price
     return {
-        "position_id": position.id.to_str(),
-        "instrument_id": position.instrument_id.to_str(),
+        "position_id": str(position.id),
+        "instrument_id": str(position.instrument_id),
         "side": "LONG" if position.is_long else "SHORT",
         "quantity": quantity,
         "avg_px_open": position.avg_px_open,
-        "mark_price": mark_price,
-        "unrealized_pnl": (mark_price - position.avg_px_open) * quantity * direction,
+        "mark_price": effective_mark,
+        "unrealized_pnl": (effective_mark - position.avg_px_open) * quantity * direction,
         "opened_at": datetime.fromtimestamp(
             position.ts_opened / 1_000_000_000, tz=UTC
         ).isoformat(),
@@ -95,8 +96,8 @@ def dashboard_position(position: Any, mark_price: float) -> dict[str, Any]:
 def dashboard_trade(position: Any) -> dict[str, Any]:
     realized_pnl = position.realized_pnl
     return {
-        "position_id": position.id.to_str(),
-        "instrument_id": position.instrument_id.to_str(),
+        "position_id": str(position.id),
+        "instrument_id": str(position.instrument_id),
         "side": "LONG" if position.entry is OrderSide.BUY else "SHORT",
         "quantity": position.peak_qty.as_double(),
         "avg_px_open": position.avg_px_open,
@@ -350,14 +351,19 @@ class SwingReversalStrategy(Strategy):
             self._dashboard.paused = self._paused
             return "entries paused" if self._paused else "entries resumed"
         if command.action == "flatten":
+            instrument_id = command.payload.get("instrument_id")
+            if instrument_id is not None and (
+                not isinstance(instrument_id, str) or not instrument_id
+            ):
+                return "rejected invalid instrument"
             self._paused = True
             assert self._dashboard is not None
             self._dashboard.paused = True
-            submitted = self._submit_flatten_orders()
+            submitted = self._submit_flatten_orders(instrument_id)
             return f"submitted {submitted} flatten limit order(s)"
         return "rejected unknown or invalid command"
 
-    def _submit_flatten_orders(self) -> int:
+    def _submit_flatten_orders(self, target_instrument_id: str | None = None) -> int:
         open_orders = self.cache.orders_open(strategy_id=self.id)
         flatten_instruments = {
             order.instrument_id for order in open_orders if is_flatten_order(order)
@@ -369,14 +375,20 @@ class SwingReversalStrategy(Strategy):
         submitted = 0
         outside_rth_tag = IBOrderTags(outsideRth=True).value
         for position in self.cache.positions_open(strategy_id=self.id):
+            if (
+                target_instrument_id is not None
+                and str(position.instrument_id) != target_instrument_id
+            ):
+                continue
             if position.instrument_id in flatten_instruments:
                 continue
             marks = self._bars.get(position.instrument_id)
             instrument = self.cache.instrument(position.instrument_id)
-            if not marks or instrument is None:
-                self.log.error(f"Cannot flatten {position.instrument_id}: mark unavailable")
+            if instrument is None:
+                self.log.error(f"Cannot flatten {position.instrument_id}: instrument unavailable")
                 continue
-            plan = build_flatten_plan(is_long=position.is_long, mark_price=marks[-1].close)
+            mark_price = marks[-1].close if marks else position.avg_px_open
+            plan = build_flatten_plan(is_long=position.is_long, mark_price=mark_price)
             for order in open_orders:
                 if order.instrument_id == position.instrument_id and not is_entry_order(order):
                     self.cancel_order(order)
@@ -403,8 +415,8 @@ class SwingReversalStrategy(Strategy):
         positions: list[dict[str, Any]] = []
         for position in self.cache.positions_open(strategy_id=self.id):
             marks = self._bars.get(position.instrument_id)
-            if marks:
-                positions.append(dashboard_position(position, marks[-1].close))
+            mark_price = marks[-1].close if marks else None
+            positions.append(dashboard_position(position, mark_price))
         self._dashboard.publish(
             timestamp_ns=timestamp_ns,
             equity=equity,

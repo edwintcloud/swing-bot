@@ -143,6 +143,7 @@ def build_trading_node_config(
                 request_warmup=True,
                 use_broker_equity=True,
                 dashboard_runtime_path=runtime.dashboard_runtime_path,
+                claim_external_orders=True,
             )
         ],
         data_clients={IB: data_config},

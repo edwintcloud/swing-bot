@@ -8,7 +8,35 @@ from swing_bot.config import StrategySettings, load_config
 class ConfigTests(unittest.TestCase):
     def test_default_configuration_loads(self) -> None:
         config = load_config()
-        self.assertEqual(config.symbols, ("NBIS", "INTC"))
+        self.assertEqual(
+            config.symbols,
+            (
+                "NBIS",
+                "INTC",
+                "GOOGL",
+                "META",
+                "AMZN",
+                "TSLA",
+                "WMT",
+                "COST",
+                "XOM",
+                "CVX",
+                "JPM",
+                "V",
+                "LLY",
+                "JNJ",
+                "GE",
+                "RTX",
+                "NVDA",
+                "MSFT",
+                "LIN",
+                "SHW",
+                "PLD",
+                "AMT",
+                "NEE",
+                "SO",
+            ),
+        )
         self.assertEqual(config.strategy.fast_sma_period, 20)
         self.assertEqual(config.strategy.slow_sma_period, 100)
         self.assertEqual(config.strategy.sma_separation_fraction, 0.05)

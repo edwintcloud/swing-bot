@@ -92,10 +92,11 @@ bot immediately. Use IB Gateway or another authenticated IB client to cancel ord
 manage positions. Do not restart until broker state is reconciled and the cause is known.
 
 The dashboard pause control prevents new strategy entries but leaves working exits and
-positions unchanged. Flatten is an asynchronous emergency action: it pauses entries,
-cancels strategy orders, and submits reduce-only GTC limit exits at a 5% collar around the
-latest completed hourly mark. Confirm fills and remaining broker orders directly in IBKR;
-the position may remain open if the market is outside the limit or trading is halted.
+positions unchanged. Flatten is an asynchronous emergency action available for all positions
+or one position at a time: it pauses entries, cancels strategy orders, and submits reduce-only
+GTC limit exits at a 1% collar around the latest hourly mark (or average entry while warmup is
+pending). Confirm fills and remaining broker orders directly in IBKR; the position may remain
+open if the market is outside the limit or trading is halted.
 
 After a disconnect, inspect `logs/`, verify Gateway health and 2FA status, then run the
 connectivity command. Startup requests all open orders for reconciliation, but the

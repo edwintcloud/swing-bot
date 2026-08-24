@@ -41,6 +41,7 @@ def strategy_import_config(
     aggregate_hourly_from_minutes: bool = False,
     dashboard_runtime_path: str | None = None,
     trade_start_ns: int = 0,
+    claim_external_orders: bool = False,
 ) -> ImportableStrategyConfig:
     instrument_ids = tuple(contract.instrument_id for contract in contracts)
     bar_specification = "1-MINUTE-LAST" if aggregate_hourly_from_minutes else "1-HOUR-LAST"
@@ -53,6 +54,7 @@ def strategy_import_config(
         config={
             "instrument_ids": instrument_ids,
             "signal_bar_types": signal_bar_types,
+            "external_order_claims": instrument_ids if claim_external_orders else None,
             "starting_equity": starting_equity,
             "request_warmup": request_warmup,
             "use_broker_equity": use_broker_equity,

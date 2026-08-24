@@ -1,1 +1,48 @@
-symbols = ["NBIS", "INTC"]
+symbols = [
+	"NBIS",
+	"INTC",
+
+	# Communication Services
+	"GOOGL",
+	"META",
+
+	# Consumer Discretionary
+	"AMZN",
+	"TSLA",
+
+	# Consumer Staples
+	"WMT",
+	"COST",
+
+	# Energy
+	"XOM",
+	"CVX",
+
+	# Financials
+	"JPM",
+	"V",
+
+	# Health Care
+	"LLY",
+	"JNJ",
+
+	# Industrials
+	"GE",
+	"RTX",
+
+	# Information Technology
+	"NVDA",
+	"MSFT",
+
+	# Materials
+	"LIN",
+	"SHW",
+
+	# Real Estate
+	"PLD",
+	"AMT",
+
+	# Utilities
+	"NEE",
+	"SO",
+]
