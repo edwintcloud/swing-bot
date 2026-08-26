@@ -7,6 +7,10 @@ paper trading, and explicitly gated live trading.
 This software can place real orders. Validate data and results, run in an IB paper
 account first, and read [docs/runbook.md](docs/runbook.md) before enabling live mode.
 
+The evidence-grounded [strategy audit](docs/audit/README.md) evaluates the current
+backtests, high-CAGR claims, established strategy families, and a capital-preservation
+redesign specification. It does not change the current implementation.
+
 ## ⚠️ Legal & Financial Disclaimer
 
 **This software is for educational and research purposes only. Do not use this code to make actual financial decisions with real money.**

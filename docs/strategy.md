@@ -1,5 +1,12 @@
 # Strategy And Risk Model
 
+## Audit Status
+
+The current implementation remains unchanged. The [strategy audit](audit/README.md)
+treats existing backtests as screening evidence, documents their data and execution
+limitations, and specifies research gates for a possible capital-preservation redesign.
+It does not establish repeatable 40-60% CAGR or authorize promotion to live trading.
+
 ## Signal
 
 Signals are evaluated after every completed one-hour bar from 4:00 through 20:00 ET,
