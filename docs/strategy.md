@@ -26,14 +26,15 @@ The opt-in `price-acceleration` strategy evaluates completed regular-hours five-
 `LAST` bars, which IB supports natively. For close $C_t$ and elapsed seconds $\Delta t$,
 velocity is $v_t=(C_t/C_{t-1}-1)/\Delta t$ and acceleration is
 $a_t=(v_t-v_{t-1})/\Delta t$. New entries are disabled for the first 15 minutes after
-the 09:30 ET open. A long setup arms only after $a_t$ reaches 2 basis points per second
-squared on two consecutive bars; a short setup mirrors the sign. Entry occurs with an IOC
-market order after directional acceleration has fallen at least 1 basis point from its
-armed peak while velocity remains in the trade direction. Setups expire after 10 seconds.
+the 09:30 ET open. A long setup arms only after $a_t$ reaches 0.2 basis points per second
+squared on two consecutive bars, equivalent to a 5 basis point increase between adjacent
+five-second returns; a short setup mirrors the sign. Entry occurs with an IOC market order
+after directional acceleration has fallen at least 0.1 basis points from its armed peak
+while velocity remains in the trade direction. Setups expire after 10 seconds.
 
 Each fill receives a reduce-only GTC trailing-stop-market order with a 15 basis point
 offset. While a position is open, three consecutive bars, approximately 15 seconds, with
-absolute acceleration at or below 0.2 basis points trigger an immediate reduce-only IOC market exit. The strategy
+absolute acceleration at or below 0.04 basis points trigger an immediate reduce-only IOC market exit. The strategy
 cancels the working trail before submitting that exit and waits five seconds after the
 position closes before rearming. Missing five-second bars reset signal warmup so overnight or
 interrupted data cannot create an acceleration measurement.

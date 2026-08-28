@@ -33,10 +33,10 @@ class StrategySettings:
 @dataclass(frozen=True)
 class PriceAccelerationSettings:
     bar_interval_seconds: int = 5
-    acceleration_threshold: float = 0.0002
+    acceleration_threshold: float = 0.00002
     acceleration_confirmation_bars: int = 2
-    deceleration_threshold: float = 0.0001
-    flatline_threshold: float = 0.00002
+    deceleration_threshold: float = 0.00001
+    flatline_threshold: float = 0.000004
     flatline_bars: int = 3
     trailing_stop_fraction: float = 0.0015
     setup_expiry_seconds: int = 10

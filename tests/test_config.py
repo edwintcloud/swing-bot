@@ -47,7 +47,9 @@ class ConfigTests(unittest.TestCase):
     def test_price_acceleration_configuration_is_isolated(self) -> None:
         settings = load_price_acceleration_config()
         self.assertEqual(settings.bar_interval_seconds, 5)
-        self.assertEqual(settings.acceleration_threshold, 0.0002)
+        self.assertEqual(settings.acceleration_threshold, 0.00002)
+        self.assertEqual(settings.deceleration_threshold, 0.00001)
+        self.assertEqual(settings.flatline_threshold, 0.000004)
         self.assertEqual(settings.acceleration_confirmation_bars, 2)
         self.assertEqual(settings.flatline_bars, 3)
         self.assertEqual(settings.trailing_stop_fraction, 0.0015)
