@@ -34,23 +34,28 @@ class AccelerationTracker:
     def update(self, close: float, timestamp_ns: int) -> AccelerationEvaluation:
         if close <= 0:
             raise ValueError("close must be positive")
+        elapsed_seconds: float | None = None
         if self.previous_timestamp_ns is not None:
             if timestamp_ns <= self.previous_timestamp_ns:
                 raise ValueError("timestamps must be strictly increasing")
-            if timestamp_ns - self.previous_timestamp_ns > NS_PER_SECOND:
+            elapsed_ns = timestamp_ns - self.previous_timestamp_ns
+            if elapsed_ns > self.settings.bar_interval_seconds * NS_PER_SECOND:
                 self.reset_session()
+            else:
+                elapsed_seconds = elapsed_ns / NS_PER_SECOND
         self.previous_timestamp_ns = timestamp_ns
         if self.previous_close is None:
             self.previous_close = close
             return AccelerationEvaluation(reason="velocity warmup")
 
-        velocity = close / self.previous_close - 1.0
+        assert elapsed_seconds is not None
+        velocity = (close / self.previous_close - 1.0) / elapsed_seconds
         self.previous_close = close
         if self.previous_velocity is None:
             self.previous_velocity = velocity
             return AccelerationEvaluation(velocity=velocity, reason="acceleration warmup")
 
-        acceleration = velocity - self.previous_velocity
+        acceleration = (velocity - self.previous_velocity) / elapsed_seconds
         self.previous_velocity = velocity
         if self.position_signal is not Signal.NONE:
             return self._evaluate_exit(velocity, acceleration)

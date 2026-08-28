@@ -118,7 +118,7 @@ class DataValidationTests(unittest.TestCase):
             second_chunk_minutes=30,
         )
 
-        second_units = [unit for unit in units if unit.bar_specification == "1-SECOND-LAST"]
+        second_units = [unit for unit in units if unit.bar_specification == "5-SECOND-LAST"]
         self.assertEqual(len(second_units), 3)
         self.assertTrue(all(unit.use_rth for unit in second_units))
         self.assertEqual(second_units[0].end - second_units[0].start, timedelta(minutes=30))

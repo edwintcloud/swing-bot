@@ -1,10 +1,12 @@
 import unittest
+from datetime import UTC, datetime
 
 from swing_bot.acceleration_strategy import (
     ACCELERATION_ENTRY_TAG,
     ACCELERATION_FLATLINE_EXIT_TAG,
     build_acceleration_entry_plan,
     is_flatline_exit_order,
+    is_regular_session,
 )
 from swing_bot.config import PriceAccelerationSettings
 from swing_bot.signals import Signal
@@ -41,6 +43,17 @@ class AccelerationEntryPlanTests(unittest.TestCase):
     def test_acceleration_entry_retains_generic_lifecycle_tag(self) -> None:
         order = type("Order", (), {"tags": ["ENTRY", ACCELERATION_ENTRY_TAG]})()
         self.assertTrue(is_entry_order(order))
+
+    def test_regular_session_uses_new_york_time(self) -> None:
+        def timestamp(value: str) -> int:
+            parsed = datetime.fromisoformat(value).astimezone(UTC)
+            return int(parsed.timestamp() * 1_000_000_000)
+
+        self.assertTrue(is_regular_session(timestamp("2026-08-28T09:30:00-04:00")))
+        self.assertTrue(is_regular_session(timestamp("2026-08-28T15:59:59-04:00")))
+        self.assertFalse(is_regular_session(timestamp("2026-08-28T09:29:59-04:00")))
+        self.assertFalse(is_regular_session(timestamp("2026-08-28T16:00:00-04:00")))
+        self.assertFalse(is_regular_session(timestamp("2026-08-29T12:00:00-04:00")))
 
 
 if __name__ == "__main__":

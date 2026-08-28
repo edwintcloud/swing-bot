@@ -208,7 +208,7 @@ def download_units(
         if second_chunk_minutes <= 0:
             raise ValueError("second_chunk_minutes must be positive")
         specifications += (
-            ("1-SECOND-LAST", timedelta(minutes=second_chunk_minutes), True),
+            ("5-SECOND-LAST", timedelta(minutes=second_chunk_minutes), True),
         )
     for bar_specification, chunk_size, use_rth in specifications:
         if chunk_size <= timedelta(0):

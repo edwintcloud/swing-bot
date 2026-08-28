@@ -30,7 +30,7 @@ from swing_bot.portfolio import PortfolioSettings
 
 BACKTEST_WARMUP_DAYS = 60
 PORTFOLIO_BACKTEST_WARMUP_DAYS = 500
-ACCELERATION_BACKTEST_WARMUP_SECONDS = 5
+ACCELERATION_BACKTEST_WARMUP_SECONDS = 15
 
 
 def strategy_import_config(
@@ -123,7 +123,7 @@ def acceleration_strategy_import_config(
 ) -> ImportableStrategyConfig:
     instrument_ids = tuple(contract.instrument_id for contract in contracts)
     signal_bar_types = tuple(
-        f"{instrument_id}-1-SECOND-LAST-EXTERNAL" for instrument_id in instrument_ids
+        f"{instrument_id}-5-SECOND-LAST-EXTERNAL" for instrument_id in instrument_ids
     )
     return ImportableStrategyConfig(
         strategy_path="swing_bot.acceleration_strategy:PriceAccelerationStrategy",
@@ -168,7 +168,7 @@ def build_backtest_config(
         warmup_start = (
             trade_start - timedelta(seconds=ACCELERATION_BACKTEST_WARMUP_SECONDS)
         ).isoformat()
-        bar_specification = "1-SECOND-LAST"
+        bar_specification = "5-SECOND-LAST"
     else:
         warmup_days = (
             PORTFOLIO_BACKTEST_WARMUP_DAYS if portfolio is not None else BACKTEST_WARMUP_DAYS

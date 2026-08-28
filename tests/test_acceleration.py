@@ -60,6 +60,15 @@ class AccelerationTrackerTests(unittest.TestCase):
         self.assertEqual(result.reason, "velocity warmup")
         self.assertEqual(self.tracker.armed_signal, Signal.NONE)
 
+    def test_five_second_bars_are_normalized_to_per_second_rates(self) -> None:
+        tracker = AccelerationTracker(PriceAccelerationSettings())
+        tracker.update(100.0, 0)
+        warmup = tracker.update(101.0, 5 * NS_PER_SECOND)
+        evaluation = tracker.update(102.01, 10 * NS_PER_SECOND)
+        self.assertAlmostEqual(warmup.velocity or 0, 0.002)
+        self.assertAlmostEqual(evaluation.velocity or 0, 0.002)
+        self.assertAlmostEqual(evaluation.acceleration or 0, 0.0)
+
     def test_flatline_requires_consecutive_bars(self) -> None:
         self.update_returns([0.0, 0.01])
         self.tracker.position_opened(Signal.LONG)

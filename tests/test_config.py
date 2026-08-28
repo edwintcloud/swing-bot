@@ -25,22 +25,9 @@ class ConfigTests(unittest.TestCase):
                 "TSLA",
                 "WMT",
                 "COST",
-                "XOM",
-                "CVX",
-                "JPM",
-                "V",
-                "LLY",
-                "JNJ",
-                "GE",
-                "RTX",
                 "NVDA",
                 "MSFT",
                 "LIN",
-                "SHW",
-                "PLD",
-                "AMT",
-                "NEE",
-                "SO",
             ),
         )
         self.assertEqual(config.strategy.fast_sma_period, 20)
@@ -59,6 +46,7 @@ class ConfigTests(unittest.TestCase):
 
     def test_price_acceleration_configuration_is_isolated(self) -> None:
         settings = load_price_acceleration_config()
+        self.assertEqual(settings.bar_interval_seconds, 5)
         self.assertEqual(settings.acceleration_threshold, 0.0002)
         self.assertEqual(settings.flatline_bars, 3)
         self.assertEqual(settings.trailing_stop_fraction, 0.0015)

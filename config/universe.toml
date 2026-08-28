@@ -14,35 +14,10 @@ symbols = [
 	"WMT",
 	"COST",
 
-	# Energy
-	"XOM",
-	"CVX",
-
-	# Financials
-	"JPM",
-	"V",
-
-	# Health Care
-	"LLY",
-	"JNJ",
-
-	# Industrials
-	"GE",
-	"RTX",
-
 	# Information Technology
 	"NVDA",
 	"MSFT",
 
 	# Materials
 	"LIN",
-	"SHW",
-
-	# Real Estate
-	"PLD",
-	"AMT",
-
-	# Utilities
-	"NEE",
-	"SO",
 ]

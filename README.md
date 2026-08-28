@@ -132,7 +132,7 @@ uv run swing-bot backtest --contracts data/contracts.json --catalog data/catalog
   --output reports/2026
 ```
 
-The price-acceleration strategy additionally requires native regular-hours second bars.
+The price-acceleration strategy additionally requires native regular-hours five-second bars.
 Download only the research interval needed because these requests are large and subject
 to IB pacing limits:
 
@@ -207,9 +207,10 @@ TRADING_STRATEGY=portfolio-momentum make paper
 ```
 
 Use `TRADING_STRATEGY=price-acceleration make paper` to select the regular-hours
-second-bar strategy. Its parameters in
+five-second-bar strategy. Its parameters in
 [config/price_acceleration.toml](config/price_acceleration.toml) are research defaults,
-not validated evidence of profitability or live execution quality.
+not validated evidence of profitability or live execution quality. IB supplies these
+bars natively, avoiding the account-level tick-by-tick subscription ceiling.
 
 On startup it reconciles broker orders and positions, obtains USD `NetLiquidation`, and
 requests 500 calendar days of hourly history before subscribing to live bars. It will not

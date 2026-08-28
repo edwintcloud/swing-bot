@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, time
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from nautilus_trader.adapters.interactive_brokers.common import IBOrderTags
 from nautilus_trader.model.data import Bar as NautilusBar
@@ -20,6 +22,9 @@ from swing_bot.telegram import telegram_notifier, trade_entered_message
 ACCELERATION_ENTRY_TAG = "ACCELERATION_ENTRY"
 ACCELERATION_TRAILING_STOP_TAG = "ACCELERATION_TRAILING_STOP"
 ACCELERATION_FLATLINE_EXIT_TAG = "ACCELERATION_FLATLINE_EXIT"
+NEW_YORK = ZoneInfo("America/New_York")
+REGULAR_SESSION_START = time(9, 30)
+REGULAR_SESSION_END = time(16)
 
 
 @dataclass(frozen=True)
@@ -43,6 +48,16 @@ def build_acceleration_entry_plan(
 
 def is_flatline_exit_order(order: Any) -> bool:
     return ACCELERATION_FLATLINE_EXIT_TAG in (order.tags or [])
+
+
+def is_regular_session(timestamp_ns: int) -> bool:
+    local = datetime.fromtimestamp(timestamp_ns / 1_000_000_000, tz=UTC).astimezone(
+        NEW_YORK
+    )
+    return (
+        local.weekday() < 5
+        and REGULAR_SESSION_START <= local.time().replace(tzinfo=None) < REGULAR_SESSION_END
+    )
 
 
 class PriceAccelerationConfig(SwingReversalConfig, frozen=True):
@@ -69,6 +84,9 @@ class PriceAccelerationStrategy(SwingReversalStrategy):
         tracker = self._trackers.setdefault(
             instrument_id, AccelerationTracker(self._acceleration_settings)
         )
+        if not is_regular_session(timestamp_ns):
+            tracker.reset_session()
+            return
         positions = self.cache.positions_open(
             instrument_id=instrument_id, strategy_id=self.id
         )

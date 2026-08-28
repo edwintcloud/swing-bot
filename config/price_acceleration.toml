@@ -1,3 +1,4 @@
+bar_interval_seconds = 5
 acceleration_threshold = 0.0002
 deceleration_threshold = 0.0001
 flatline_threshold = 0.00002

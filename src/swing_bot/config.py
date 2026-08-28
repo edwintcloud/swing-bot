@@ -32,6 +32,7 @@ class StrategySettings:
 
 @dataclass(frozen=True)
 class PriceAccelerationSettings:
+    bar_interval_seconds: int = 5
     acceleration_threshold: float = 0.0002
     deceleration_threshold: float = 0.0001
     flatline_threshold: float = 0.00002
@@ -41,6 +42,8 @@ class PriceAccelerationSettings:
     cooldown_seconds: int = 5
 
     def __post_init__(self) -> None:
+        if self.bar_interval_seconds <= 0:
+            raise ValueError("bar_interval_seconds must be positive")
         thresholds = (
             self.acceleration_threshold,
             self.deceleration_threshold,

@@ -280,7 +280,7 @@ class NodeConfigTests(unittest.TestCase):
             end="2024-01-01T10:00:00-05:00",
         )
 
-        self.assertEqual(config.data[0].bar_spec, "1-SECOND-LAST")
+        self.assertEqual(config.data[0].bar_spec, "5-SECOND-LAST")
         imported = config.engine.strategies[0]
         self.assertEqual(
             imported.strategy_path,
@@ -288,7 +288,7 @@ class NodeConfigTests(unittest.TestCase):
         )
         self.assertEqual(
             imported.config["signal_bar_types"],
-            ("MU.NASDAQ-1-SECOND-LAST-EXTERNAL",),
+            ("MU.NASDAQ-5-SECOND-LAST-EXTERNAL",),
         )
         PriceAccelerationConfig(**imported.config)
         self.assertEqual(config.venues[0].fill_model.config["prob_slippage"], 1.0)
@@ -358,7 +358,7 @@ class NodeConfigTests(unittest.TestCase):
         imported = config.strategies[0]
         self.assertEqual(
             imported.config["signal_bar_types"],
-            ("MU.NASDAQ-1-SECOND-LAST-EXTERNAL",),
+            ("MU.NASDAQ-5-SECOND-LAST-EXTERNAL",),
         )
         self.assertTrue(imported.config["use_broker_equity"])
         self.assertEqual(imported.config["external_order_claims"], ("MU.NASDAQ",))
