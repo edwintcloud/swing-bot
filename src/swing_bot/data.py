@@ -52,6 +52,7 @@ class DownloadUnit:
     start: datetime
     end: datetime
     cache_key: str
+    use_rth: bool
 
 
 class HistoricalBarClient(Protocol):
@@ -190,19 +191,38 @@ def download_units(
     end: datetime,
     hourly_chunk_days: int,
     minute_chunk_days: int,
+    include_second_bars: bool = False,
+    second_chunk_minutes: int = 30,
 ) -> tuple[DownloadUnit, ...]:
+    if start >= end:
+        raise ValueError("Historical start must precede end")
     contract_identity = ",".join(
         str(contract.con_id) for contract in sorted(contracts, key=lambda item: item.con_id)
     )
     units: list[DownloadUnit] = []
-    for bar_specification, chunk_days in (
-        ("1-HOUR-LAST", hourly_chunk_days),
-        ("1-MINUTE-LAST", minute_chunk_days),
-    ):
-        for chunk_start, chunk_end in history_chunks(start, end, chunk_days):
+    specifications = (
+        ("1-HOUR-LAST", timedelta(days=hourly_chunk_days), False),
+        ("1-MINUTE-LAST", timedelta(days=minute_chunk_days), False),
+    )
+    if include_second_bars:
+        if second_chunk_minutes <= 0:
+            raise ValueError("second_chunk_minutes must be positive")
+        specifications += (
+            ("1-SECOND-LAST", timedelta(minutes=second_chunk_minutes), True),
+        )
+    for bar_specification, chunk_size, use_rth in specifications:
+        if chunk_size <= timedelta(0):
+            raise ValueError("Download chunk size must be positive")
+        chunks: list[tuple[datetime, datetime]] = []
+        cursor = start
+        while cursor < end:
+            chunk_end = min(cursor + chunk_size, end)
+            chunks.append((cursor, chunk_end))
+            cursor = chunk_end
+        for chunk_start, chunk_end in chunks:
             identity = (
                 f"{contract_identity}|{bar_specification}|"
-                f"{chunk_start.isoformat()}|{chunk_end.isoformat()}|use_rth=false"
+                f"{chunk_start.isoformat()}|{chunk_end.isoformat()}|use_rth={str(use_rth).lower()}"
             )
             units.append(
                 DownloadUnit(
@@ -210,6 +230,7 @@ def download_units(
                     start=chunk_start,
                     end=chunk_end,
                     cache_key=hashlib.sha256(identity.encode("ascii")).hexdigest()[:20],
+                    use_rth=use_rth,
                 )
             )
     return tuple(units)
@@ -279,6 +300,8 @@ async def download_history(
     timeout: int = 120,
     minute_chunk_days: int = 30,
     hourly_chunk_days: int = 30,
+    include_second_bars: bool = False,
+    second_chunk_minutes: int = 30,
     retries: int = 3,
     manifest_path: Path | str | None = None,
     cache_path: Path | str | None = None,
@@ -289,6 +312,8 @@ async def download_history(
         end=end,
         hourly_chunk_days=hourly_chunk_days,
         minute_chunk_days=minute_chunk_days,
+        include_second_bars=include_second_bars,
+        second_chunk_minutes=second_chunk_minutes,
     )
     if retries < 0:
         raise ValueError("retries cannot be negative")
@@ -316,7 +341,7 @@ async def download_history(
                         end_date_time=ib_request_datetime(unit.end),
                         tz_name="America/New_York",
                         contracts=ib_contracts,
-                        use_rth=False,
+                        use_rth=unit.use_rth,
                         timeout=timeout,
                     ),
                 )

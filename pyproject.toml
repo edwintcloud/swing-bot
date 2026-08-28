@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "swing-bot"
 version = "0.1.0"
-description = "NautilusTrader SMA continuation strategy for Interactive Brokers"
+description = "NautilusTrader systematic trading strategies for Interactive Brokers"
 license = { file = "LICENSE" }
 requires-python = ">=3.13,<3.14"
 dependencies = [

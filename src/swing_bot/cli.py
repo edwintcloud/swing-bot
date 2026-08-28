@@ -14,7 +14,11 @@ from nautilus_trader.adapters.interactive_brokers.historical.client import (
 from nautilus_trader.persistence.catalog import ParquetDataCatalog
 
 from swing_bot.backtest import build_backtest_config, run_backtest, write_backtest_reports
-from swing_bot.config import load_config
+from swing_bot.config import (
+    load_config,
+    load_portfolio_config,
+    load_price_acceleration_config,
+)
 from swing_bot.contracts import discover_contracts, load_resolved_contracts, save_resolved_contracts
 from swing_bot.data import (
     bar_to_record,
@@ -36,6 +40,8 @@ from swing_bot.telegram import (
     close_telegram,
     configure_telegram,
 )
+
+STRATEGY_CHOICES = ("sma-continuation", "portfolio-momentum", "price-acceleration")
 
 
 def _datetime(value: str) -> datetime:
@@ -78,6 +84,8 @@ def _download(args: argparse.Namespace) -> None:
             timeout=args.timeout,
             minute_chunk_days=args.minute_chunk_days,
             hourly_chunk_days=args.hourly_chunk_days,
+            include_second_bars=args.include_second_bars,
+            second_chunk_minutes=args.second_chunk_minutes,
             retries=args.retries,
         )
     )
@@ -103,7 +111,17 @@ def _validate(args: argparse.Namespace) -> None:
 
 def _backtest(args: argparse.Namespace) -> None:
     app = load_config(args.config_dir)
+    acceleration = (
+        load_price_acceleration_config(args.config_dir)
+        if args.strategy == "price-acceleration"
+        else None
+    )
     contracts = load_resolved_contracts(args.contracts)
+    portfolio_config = (
+        load_portfolio_config(app.symbols, args.config_dir)
+        if args.strategy == "portfolio-momentum"
+        else None
+    )
     config = build_backtest_config(
         catalog_path=args.catalog,
         contracts=contracts,
@@ -112,6 +130,10 @@ def _backtest(args: argparse.Namespace) -> None:
         start=args.start.isoformat(),
         end=args.end.isoformat(),
         starting_equity=args.starting_equity,
+        portfolio=portfolio_config.settings if portfolio_config else None,
+        sectors=portfolio_config.sectors if portfolio_config else None,
+        strategy_name=args.strategy,
+        acceleration=acceleration,
     )
     node, results = run_backtest(config)
     try:
@@ -135,6 +157,16 @@ def _connectivity(args: argparse.Namespace) -> None:
 
 def _trade(args: argparse.Namespace) -> None:
     app = load_config(args.config_dir)
+    acceleration = (
+        load_price_acceleration_config(args.config_dir)
+        if args.strategy == "price-acceleration"
+        else None
+    )
+    portfolio_config = (
+        load_portfolio_config(app.symbols, args.config_dir)
+        if args.strategy == "portfolio-momentum"
+        else None
+    )
     runtime = runtime_from_environment()
     if runtime.mode != args.command:
         raise ValueError(f"TRADING_MODE must be {args.command} for this command")
@@ -144,6 +176,10 @@ def _trade(args: argparse.Namespace) -> None:
         contracts=contracts,
         strategy=app.strategy,
         risk=app.risk,
+        portfolio=portfolio_config.settings if portfolio_config else None,
+        sectors=portfolio_config.sectors if portfolio_config else None,
+        strategy_name=args.strategy,
+        acceleration=acceleration,
     )
     notifier = configure_telegram()
     node = None
@@ -203,6 +239,8 @@ def build_parser() -> argparse.ArgumentParser:
     download.add_argument("--timeout", type=int, default=120)
     download.add_argument("--minute-chunk-days", "--chunk-days", type=int, default=30)
     download.add_argument("--hourly-chunk-days", type=int, default=30)
+    download.add_argument("--include-second-bars", action="store_true")
+    download.add_argument("--second-chunk-minutes", type=int, default=30)
     download.add_argument("--retries", type=int, default=3)
     download.set_defaults(handler=_download)
 
@@ -219,6 +257,11 @@ def build_parser() -> argparse.ArgumentParser:
     backtest.add_argument("--end", type=_datetime, required=True)
     backtest.add_argument("--starting-equity", type=float, default=100_000.0)
     backtest.add_argument("--output", default="reports/latest")
+    backtest.add_argument(
+        "--strategy",
+        choices=STRATEGY_CHOICES,
+        default="sma-continuation",
+    )
     backtest.set_defaults(handler=_backtest)
 
     connectivity = subparsers.add_parser("connectivity")
@@ -238,6 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("paper", "live"):
         trade = subparsers.add_parser(name)
         trade.add_argument("--contracts", default="data/contracts.json")
+        trade.add_argument("--strategy", choices=STRATEGY_CHOICES, default="sma-continuation")
         trade.set_defaults(handler=_trade)
     return parser
 

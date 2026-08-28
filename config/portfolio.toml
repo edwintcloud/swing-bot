@@ -1,0 +1,13 @@
+momentum_lookback = 252
+momentum_skip = 21
+trend_lookback = 200
+volatility_lookback = 63
+liquidity_lookback = 20
+periods_per_year = 252
+maximum_positions = 10
+target_gross_exposure = 0.80
+maximum_name_fraction = 0.10
+maximum_sector_fraction = 0.25
+volatility_floor = 0.10
+minimum_price = 5.0
+minimum_median_dollar_volume = 10000000.0

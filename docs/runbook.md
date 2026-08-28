@@ -70,6 +70,13 @@ Run paper mode through at least several complete signal and exit cycles. At each
 4. Confirm each entry fill has a reduce-only 5% trailing stop.
 5. Review rejected orders, stale bars, disconnects, and circuit-breaker messages.
 
+For `price-acceleration`, also verify that data arrives as completed regular-hours
+`1-SECOND-LAST` bars, every fill receives a 15 basis point reduce-only trailing stop,
+and a three-bar flatline cancels that stop before submitting one reduce-only IOC market
+exit. Reconcile both orders directly in IB because the stop cancellation and immediate
+exit can cross in flight. Test restart and shutdown with an open paper position before
+considering any live use.
+
 Promote to live only after observed paper fills and operational behavior are acceptable.
 Use the smallest practical live capital and size initially.
 

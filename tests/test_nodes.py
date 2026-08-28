@@ -8,8 +8,9 @@ from unittest.mock import patch
 
 from nautilus_trader.backtest.results import BacktestResult
 
+from swing_bot.acceleration_strategy import PriceAccelerationConfig
 from swing_bot.backtest import build_backtest_config, write_backtest_reports
-from swing_bot.config import RiskSettings, StrategySettings
+from swing_bot.config import PriceAccelerationSettings, RiskSettings, StrategySettings
 from swing_bot.contracts import ResolvedContract
 from swing_bot.node import (
     LIVE_ACKNOWLEDGEMENT,
@@ -17,6 +18,8 @@ from swing_bot.node import (
     build_trading_node_config,
     install_ib_error_notifications,
 )
+from swing_bot.portfolio import PortfolioSettings
+from swing_bot.portfolio_strategy import PortfolioMomentumConfig
 
 CONTRACT = ResolvedContract("MU", "MU.NASDAQ", 123, "NASDAQ")
 
@@ -239,6 +242,58 @@ class NodeConfigTests(unittest.TestCase):
         self.assertEqual(config.engine.risk_engine.max_notional_per_order, {"MU.NASDAQ": 30_000})
         self.assertFalse(config.dispose_on_completion)
 
+    def test_portfolio_backtest_is_opt_in_and_uses_adverse_costs(self) -> None:
+        config = build_backtest_config(
+            catalog_path="catalog",
+            contracts=[CONTRACT],
+            strategy=StrategySettings(),
+            risk=RiskSettings(),
+            portfolio=PortfolioSettings(),
+            sectors={"MU": "Materials"},
+            start="2024-01-01T00:00:00-05:00",
+            end="2025-01-01T00:00:00-05:00",
+        )
+
+        self.assertEqual(config.start, "2022-08-19T00:00:00-05:00")
+        strategy = config.engine.strategies[0]
+        self.assertEqual(
+            strategy.strategy_path,
+            "swing_bot.portfolio_strategy:PortfolioMomentumStrategy",
+        )
+        self.assertEqual(strategy.config["sectors"], {"MU": "Materials"})
+        self.assertEqual(config.venues[0].fill_model.config["prob_slippage"], 1.0)
+        self.assertEqual(
+            config.venues[0].fee_model.fee_model_path,
+            "nautilus_trader.backtest.models:PerContractFeeModel",
+        )
+        self.assertEqual(config.venues[0].fee_model.config["commission"], "0.005 USD")
+
+    def test_acceleration_backtest_uses_native_second_bars_and_adverse_costs(self) -> None:
+        config = build_backtest_config(
+            catalog_path="catalog",
+            contracts=[CONTRACT],
+            strategy=StrategySettings(),
+            risk=RiskSettings(),
+            strategy_name="price-acceleration",
+            acceleration=PriceAccelerationSettings(),
+            start="2024-01-01T09:30:00-05:00",
+            end="2024-01-01T10:00:00-05:00",
+        )
+
+        self.assertEqual(config.data[0].bar_spec, "1-SECOND-LAST")
+        imported = config.engine.strategies[0]
+        self.assertEqual(
+            imported.strategy_path,
+            "swing_bot.acceleration_strategy:PriceAccelerationStrategy",
+        )
+        self.assertEqual(
+            imported.config["signal_bar_types"],
+            ("MU.NASDAQ-1-SECOND-LAST-EXTERNAL",),
+        )
+        PriceAccelerationConfig(**imported.config)
+        self.assertEqual(config.venues[0].fill_model.config["prob_slippage"], 1.0)
+        self.assertEqual(config.venues[0].fee_model.config["commission"], "0.005 USD")
+
     def test_paper_mode_defaults_to_gateway_port_4002(self) -> None:
         runtime = RuntimeSettings(
             mode="paper",
@@ -264,6 +319,49 @@ class NodeConfigTests(unittest.TestCase):
         self.assertEqual(strategy_config["external_order_claims"], ("MU.NASDAQ",))
         self.assertEqual(strategy_config["dashboard_runtime_path"], "/app/runtime")
         self.assertEqual(config.risk_engine.max_notional_per_order, {})
+
+    def test_portfolio_strategy_is_available_for_reconciled_trading(self) -> None:
+        runtime = RuntimeSettings(mode="paper", account_id="DU123")
+        config = build_trading_node_config(
+            runtime=runtime,
+            contracts=[CONTRACT],
+            strategy=StrategySettings(),
+            risk=RiskSettings(),
+            portfolio=PortfolioSettings(),
+            sectors={"MU": "Materials"},
+        )
+
+        strategy = config.strategies[0]
+        self.assertEqual(
+            strategy.strategy_path,
+            "swing_bot.portfolio_strategy:PortfolioMomentumStrategy",
+        )
+        self.assertEqual(strategy.config["signal_bar_types"], ("MU.NASDAQ-1-HOUR-LAST-EXTERNAL",))
+        self.assertTrue(strategy.config["request_warmup"])
+        self.assertEqual(PortfolioMomentumConfig(**strategy.config).warmup_days, 500)
+        self.assertTrue(strategy.config["use_broker_equity"])
+        self.assertFalse(strategy.config["aggregate_hourly_from_minutes"])
+        self.assertEqual(strategy.config["external_order_claims"], ("MU.NASDAQ",))
+
+    def test_acceleration_trading_uses_regular_hours_second_bars(self) -> None:
+        runtime = RuntimeSettings(mode="paper", account_id="DU123")
+        config = build_trading_node_config(
+            runtime=runtime,
+            contracts=[CONTRACT],
+            strategy=StrategySettings(),
+            risk=RiskSettings(),
+            strategy_name="price-acceleration",
+            acceleration=PriceAccelerationSettings(),
+        )
+
+        self.assertTrue(config.data_clients["INTERACTIVE_BROKERS"].use_regular_trading_hours)
+        imported = config.strategies[0]
+        self.assertEqual(
+            imported.config["signal_bar_types"],
+            ("MU.NASDAQ-1-SECOND-LAST-EXTERNAL",),
+        )
+        self.assertTrue(imported.config["use_broker_equity"])
+        self.assertEqual(imported.config["external_order_claims"], ("MU.NASDAQ",))
 
     def test_live_mode_requires_acknowledgement(self) -> None:
         with self.assertRaisesRegex(ValueError, "acknowledgement"):

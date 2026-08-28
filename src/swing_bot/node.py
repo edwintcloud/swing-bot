@@ -27,9 +27,14 @@ from nautilus_trader.config import (
 )
 from nautilus_trader.live.node import TradingNode
 
-from swing_bot.backtest import strategy_import_config
-from swing_bot.config import RiskSettings, StrategySettings
+from swing_bot.backtest import (
+    acceleration_strategy_import_config,
+    portfolio_strategy_import_config,
+    strategy_import_config,
+)
+from swing_bot.config import PriceAccelerationSettings, RiskSettings, StrategySettings
 from swing_bot.contracts import ResolvedContract
+from swing_bot.portfolio import PortfolioSettings
 from swing_bot.telegram import (
     bot_disconnected_message,
     bot_reconnected_message,
@@ -103,6 +108,10 @@ def build_trading_node_config(
     contracts: Sequence[ResolvedContract],
     strategy: StrategySettings,
     risk: RiskSettings,
+    portfolio: PortfolioSettings | None = None,
+    sectors: dict[str, str] | None = None,
+    strategy_name: str = "sma-continuation",
+    acceleration: PriceAccelerationSettings | None = None,
 ) -> TradingNodeConfig:
     if not contracts:
         raise ValueError("Trading node requires resolved contracts")
@@ -115,7 +124,7 @@ def build_trading_node_config(
         ibg_host=runtime.host,
         ibg_port=runtime.gateway_port,
         ibg_client_id=runtime.data_client_id,
-        use_regular_trading_hours=False,
+        use_regular_trading_hours=strategy_name == "price-acceleration",
         market_data_type=IBMarketDataTypeEnum.REALTIME,
         handle_revised_bars=True,
         connection_timeout=300,
@@ -135,7 +144,29 @@ def build_trading_node_config(
     return TradingNodeConfig(
         trader_id="SWING-001",
         strategies=[
-            strategy_import_config(
+            acceleration_strategy_import_config(
+                contracts,
+                acceleration,
+                risk,
+                starting_equity=0.0,
+                use_broker_equity=True,
+                dashboard_runtime_path=runtime.dashboard_runtime_path,
+                claim_external_orders=True,
+            )
+            if strategy_name == "price-acceleration" and acceleration is not None
+            else portfolio_strategy_import_config(
+                contracts,
+                portfolio,
+                sectors or {},
+                starting_equity=0.0,
+                request_warmup=True,
+                use_broker_equity=True,
+                aggregate_hourly_from_minutes=False,
+                dashboard_runtime_path=runtime.dashboard_runtime_path,
+                claim_external_orders=True,
+            )
+            if portfolio is not None
+            else strategy_import_config(
                 contracts,
                 strategy,
                 risk,

@@ -20,6 +20,26 @@ the narrow entry band prevents chasing an extended move.
 Both moving averages include the current completed bar when evaluating the current
 threshold. There are no RSI, z-score, candle-body, or ATR conditions.
 
+## Price Acceleration Scalper
+
+The opt-in `price-acceleration` strategy evaluates completed regular-hours one-second
+bars. For close $C_t$, velocity is $v_t=C_t/C_{t-1}-1$ and acceleration is
+$a_t=v_t-v_{t-1}$. A long setup arms when $a_t$ reaches 2 basis points per second
+squared; a short setup mirrors the sign. Entry occurs with an IOC market order after
+directional acceleration has fallen at least 1 basis point from its armed peak while
+velocity remains in the trade direction. Setups expire after 10 seconds.
+
+Each fill receives a reduce-only GTC trailing-stop-market order with a 15 basis point
+offset. While a position is open, three consecutive bars with absolute acceleration at
+or below 0.2 basis points trigger an immediate reduce-only IOC market exit. The strategy
+cancels the working trail before submitting that exit and waits five seconds after the
+position closes before rearming. Missing-second gaps reset signal warmup so overnight or
+interrupted data cannot create an acceleration measurement.
+
+These values are configurable in `config/price_acceleration.toml` and are an unvalidated
+research baseline. One-second OHLC backtests do not model spread, queue position,
+latency, market impact, stop gaps, or the cancel/exit race with broker precision.
+
 Entry is a GTC limit order at the completed signal bar's close, with IB's `outsideRth`
 flag enabled. Each entry fill immediately receives a reduce-only GTC trailing-stop-market
 order with a fixed 5% (500 basis point) offset and `outsideRth` enabled. The same 5%

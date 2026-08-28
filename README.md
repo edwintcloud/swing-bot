@@ -1,15 +1,17 @@
 # Swing Bot
 
-A NautilusTrader `1.231.0` hourly SMA continuation strategy for a fixed US-stock universe (see [config/universe.toml](config/universe.toml)),
-with Interactive Brokers contract discovery, historical data ingestion, backtesting,
-paper trading, and explicitly gated live trading.
+A NautilusTrader `1.231.0` trading bot with hourly SMA continuation, portfolio
+momentum, and price-acceleration strategies for a fixed US-stock universe (see
+[config/universe.toml](config/universe.toml)), Interactive Brokers contract discovery,
+historical data ingestion, backtesting, paper trading, and explicitly gated live trading.
 
 This software can place real orders. Validate data and results, run in an IB paper
 account first, and read [docs/runbook.md](docs/runbook.md) before enabling live mode.
 
 The evidence-grounded [strategy audit](docs/audit/README.md) evaluates the current
 backtests, high-CAGR claims, established strategy families, and a capital-preservation
-redesign specification. It does not change the current implementation.
+redesign specification. The redesign is opt-in for backtest, paper, and live modes; the
+SMA strategy remains the default.
 
 ## ⚠️ Legal & Financial Disclaimer
 
@@ -130,6 +132,34 @@ uv run swing-bot backtest --contracts data/contracts.json --catalog data/catalog
   --output reports/2026
 ```
 
+The price-acceleration strategy additionally requires native regular-hours second bars.
+Download only the research interval needed because these requests are large and subject
+to IB pacing limits:
+
+```sh
+uv run swing-bot download-data --contracts data/contracts.json --catalog data/catalog \
+  --start 2026-08-01T09:30:00-04:00 --end 2026-08-01T16:00:00-04:00 \
+  --include-second-bars --second-chunk-minutes 30
+uv run swing-bot backtest --strategy price-acceleration \
+  --contracts data/contracts.json --catalog data/catalog \
+  --start 2026-08-01T09:30:00-04:00 --end 2026-08-01T16:00:00-04:00 \
+  --output reports/price-acceleration
+```
+
+Run the cross-sectional momentum strategy explicitly:
+
+```sh
+uv run swing-bot backtest --strategy portfolio-momentum \
+  --contracts data/contracts.json --catalog data/catalog \
+  --start 2015-01-01T00:00:00-05:00 --end 2025-01-01T00:00:00-05:00 \
+  --output reports/portfolio-momentum
+```
+
+This mode loads [config/portfolio.toml](config/portfolio.toml) and
+[config/sectors.toml](config/sectors.toml), requires 500 calendar days of warmup data,
+and uses conservative commission and slippage assumptions. The current catalog does not
+contain the broad point-in-time history required by the audit's promotion gates.
+
 The equivalent configurable Make target is:
 
 ```sh
@@ -169,14 +199,36 @@ make paper
 make logs
 ```
 
+Select portfolio momentum for paper trading with an environment override or set
+`TRADING_STRATEGY=portfolio-momentum` in `.env`:
+
+```sh
+TRADING_STRATEGY=portfolio-momentum make paper
+```
+
+Use `TRADING_STRATEGY=price-acceleration make paper` to select the regular-hours
+second-bar strategy. Its parameters in
+[config/price_acceleration.toml](config/price_acceleration.toml) are research defaults,
+not validated evidence of profitability or live execution quality.
+
+On startup it reconciles broker orders and positions, obtains USD `NetLiquidation`, and
+requests 500 calendar days of hourly history before subscribing to live bars. It will not
+rebalance until every configured instrument has reached the weekly synchronization point.
+The dashboard pause and flatten controls apply to the selected strategy.
+
 Live operation requires all of the following: the live Compose override, a non-`DU`
 account, port `4001`, `TRADING_MODE=live`, and the exact acknowledgement token.
 
 ```sh
 TWS_ACCOUNT=U0000000 \
 LIVE_TRADING_ACK=I_UNDERSTAND_LIVE_ORDERS_ARE_REAL \
+TRADING_STRATEGY=portfolio-momentum \
 make live
 ```
+
+Availability is not evidence of promotion readiness. The portfolio strategy still lacks
+the broad point-in-time data and decade-plus validation required by the audit gates; use
+live mode only after independently accepting those unresolved risks.
 
 Use `make stop` for a graceful stop. It cancels unfilled entry orders, preserves
 broker-held trailing stops for open positions, and does not liquidate positions. See the
@@ -208,6 +260,8 @@ bot token secret; anyone with it can control the bot.
 - [config/universe.toml](config/universe.toml): ticker universe.
 - [config/strategy.toml](config/strategy.toml): SMA separation, crossover, and trailing stop.
 - [config/risk.toml](config/risk.toml): sizing, exposure limits, and circuit breakers.
+- [config/portfolio.toml](config/portfolio.toml): research momentum and allocation rules.
+- [config/sectors.toml](config/sectors.toml): research universe sector caps.
 - [docs/strategy.md](docs/strategy.md): exact rules and simulation limitations.
 - [docs/runbook.md](docs/runbook.md): operator checklist and incident response.
 

@@ -12,7 +12,7 @@ services:
       start_period: 90s
 
   bot:
-    command: ["live", "--contracts", "/app/data/contracts.json"]
+    command: ["live", "--contracts", "/app/data/contracts.json", "--strategy", "${TRADING_STRATEGY:-sma-continuation}"]
     environment:
       TRADING_MODE: live
       TWS_ACCOUNT: ${TWS_ACCOUNT:?Set a live TWS_ACCOUNT}

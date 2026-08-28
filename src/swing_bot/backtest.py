@@ -24,10 +24,13 @@ from nautilus_trader.config import (
     RiskEngineConfig,
 )
 
-from swing_bot.config import RiskSettings, StrategySettings
+from swing_bot.config import PriceAccelerationSettings, RiskSettings, StrategySettings
 from swing_bot.contracts import ResolvedContract
+from swing_bot.portfolio import PortfolioSettings
 
 BACKTEST_WARMUP_DAYS = 60
+PORTFOLIO_BACKTEST_WARMUP_DAYS = 500
+ACCELERATION_BACKTEST_WARMUP_SECONDS = 5
 
 
 def strategy_import_config(
@@ -67,6 +70,79 @@ def strategy_import_config(
     )
 
 
+def portfolio_strategy_import_config(
+    contracts: Sequence[ResolvedContract],
+    portfolio: PortfolioSettings,
+    sectors: dict[str, str],
+    *,
+    starting_equity: float,
+    request_warmup: bool = False,
+    use_broker_equity: bool = False,
+    aggregate_hourly_from_minutes: bool = True,
+    dashboard_runtime_path: str | None = None,
+    trade_start_ns: int = 0,
+    claim_external_orders: bool = False,
+) -> ImportableStrategyConfig:
+    instrument_ids = tuple(contract.instrument_id for contract in contracts)
+    bar_specification = "1-MINUTE-LAST" if aggregate_hourly_from_minutes else "1-HOUR-LAST"
+    signal_bar_types = tuple(
+        f"{instrument_id}-{bar_specification}-EXTERNAL" for instrument_id in instrument_ids
+    )
+    missing_sectors = sorted(contract.symbol for contract in contracts if contract.symbol not in sectors)
+    if missing_sectors:
+        raise ValueError(f"Portfolio sectors unavailable for: {', '.join(missing_sectors)}")
+    return ImportableStrategyConfig(
+        strategy_path="swing_bot.portfolio_strategy:PortfolioMomentumStrategy",
+        config_path="swing_bot.portfolio_strategy:PortfolioMomentumConfig",
+        config={
+            "instrument_ids": instrument_ids,
+            "signal_bar_types": signal_bar_types,
+            "external_order_claims": instrument_ids if claim_external_orders else None,
+            "starting_equity": starting_equity,
+            "request_warmup": request_warmup,
+            "use_broker_equity": use_broker_equity,
+            "aggregate_hourly_from_minutes": aggregate_hourly_from_minutes,
+            "dashboard_runtime_path": dashboard_runtime_path,
+            "trade_start_ns": trade_start_ns,
+            "sectors": {contract.symbol: sectors[contract.symbol] for contract in contracts},
+            "portfolio_settings": asdict(portfolio),
+        },
+    )
+
+
+def acceleration_strategy_import_config(
+    contracts: Sequence[ResolvedContract],
+    acceleration: PriceAccelerationSettings,
+    risk: RiskSettings,
+    *,
+    starting_equity: float,
+    use_broker_equity: bool = False,
+    dashboard_runtime_path: str | None = None,
+    trade_start_ns: int = 0,
+    claim_external_orders: bool = False,
+) -> ImportableStrategyConfig:
+    instrument_ids = tuple(contract.instrument_id for contract in contracts)
+    signal_bar_types = tuple(
+        f"{instrument_id}-1-SECOND-LAST-EXTERNAL" for instrument_id in instrument_ids
+    )
+    return ImportableStrategyConfig(
+        strategy_path="swing_bot.acceleration_strategy:PriceAccelerationStrategy",
+        config_path="swing_bot.acceleration_strategy:PriceAccelerationConfig",
+        config={
+            "instrument_ids": instrument_ids,
+            "signal_bar_types": signal_bar_types,
+            "external_order_claims": instrument_ids if claim_external_orders else None,
+            "starting_equity": starting_equity,
+            "request_warmup": False,
+            "use_broker_equity": use_broker_equity,
+            "dashboard_runtime_path": dashboard_runtime_path,
+            "trade_start_ns": trade_start_ns,
+            "acceleration_settings": asdict(acceleration),
+            "risk_settings": asdict(risk),
+        },
+    )
+
+
 def build_backtest_config(
     *,
     catalog_path: Path | str,
@@ -76,13 +152,29 @@ def build_backtest_config(
     start: str,
     end: str,
     starting_equity: float = 100_000.0,
+    portfolio: PortfolioSettings | None = None,
+    sectors: dict[str, str] | None = None,
+    strategy_name: str = "sma-continuation",
+    acceleration: PriceAccelerationSettings | None = None,
 ) -> BacktestRunConfig:
     if not contracts:
         raise ValueError("Backtest requires at least one resolved contract")
     trade_start = datetime.fromisoformat(start)
     if trade_start.tzinfo is None:
         raise ValueError("Backtest start must include a timezone offset")
-    warmup_start = (trade_start - timedelta(days=BACKTEST_WARMUP_DAYS)).isoformat()
+    if strategy_name == "price-acceleration":
+        if acceleration is None:
+            raise ValueError("Price acceleration settings are required")
+        warmup_start = (
+            trade_start - timedelta(seconds=ACCELERATION_BACKTEST_WARMUP_SECONDS)
+        ).isoformat()
+        bar_specification = "1-SECOND-LAST"
+    else:
+        warmup_days = (
+            PORTFOLIO_BACKTEST_WARMUP_DAYS if portfolio is not None else BACKTEST_WARMUP_DAYS
+        )
+        warmup_start = (trade_start - timedelta(days=warmup_days)).isoformat()
+        bar_specification = "1-MINUTE-LAST"
     trade_start_ns = int(trade_start.timestamp() * 1_000_000_000)
     path = str(Path(catalog_path).resolve())
     instrument_ids = [contract.instrument_id for contract in contracts]
@@ -91,14 +183,21 @@ def build_backtest_config(
             catalog_path=path,
             data_cls="nautilus_trader.model.data:Bar",
             instrument_ids=instrument_ids,
-            bar_spec="1-MINUTE-LAST",
+            bar_spec=bar_specification,
             start_time=warmup_start,
             end_time=end,
         )
     ]
     venue_names = sorted({contract.instrument_id.rsplit(".", 1)[-1] for contract in contracts})
     venue_starting_equity = starting_equity / len(venue_names)
-    maximum_order_notional = int(starting_equity * risk.maximum_gross_exposure)
+    maximum_order_notional = int(
+        starting_equity
+        * (
+            portfolio.target_gross_exposure
+            if portfolio is not None
+            else risk.maximum_gross_exposure
+        )
+    )
     venues = [
         BacktestVenueConfig(
             name=name,
@@ -112,14 +211,30 @@ def build_backtest_config(
                 config_path="nautilus_trader.backtest.config:FillModelConfig",
                 config={
                     "prob_fill_on_limit": 1.0,
-                    "prob_slippage": 0.0,
+                    "prob_slippage": (
+                        1.0
+                        if portfolio is not None or strategy_name == "price-acceleration"
+                        else 0.0
+                    ),
                     "random_seed": 42,
                 },
             ),
             fee_model=ImportableFeeModelConfig(
-                fee_model_path="nautilus_trader.backtest.models:MakerTakerFeeModel",
-                config_path="nautilus_trader.backtest.config:MakerTakerFeeModelConfig",
-                config={},
+                fee_model_path=(
+                    "nautilus_trader.backtest.models:PerContractFeeModel"
+                    if portfolio is not None or strategy_name == "price-acceleration"
+                    else "nautilus_trader.backtest.models:MakerTakerFeeModel"
+                ),
+                config_path=(
+                    "nautilus_trader.backtest.config:PerContractFeeModelConfig"
+                    if portfolio is not None or strategy_name == "price-acceleration"
+                    else "nautilus_trader.backtest.config:MakerTakerFeeModelConfig"
+                ),
+                config=(
+                    {"commission": "0.005 USD"}
+                    if portfolio is not None or strategy_name == "price-acceleration"
+                    else {}
+                ),
             ),
             bar_execution=True,
             bar_adaptive_high_low_ordering=True,
@@ -130,7 +245,23 @@ def build_backtest_config(
     engine = BacktestEngineConfig(
         trader_id="BACKTEST-001",
         strategies=[
-            strategy_import_config(
+            acceleration_strategy_import_config(
+                contracts,
+                acceleration,
+                risk,
+                starting_equity=starting_equity,
+                trade_start_ns=trade_start_ns,
+            )
+            if strategy_name == "price-acceleration" and acceleration is not None
+            else portfolio_strategy_import_config(
+                contracts,
+                portfolio,
+                sectors or {},
+                starting_equity=starting_equity,
+                trade_start_ns=trade_start_ns,
+            )
+            if portfolio is not None
+            else strategy_import_config(
                 contracts,
                 strategy,
                 risk,

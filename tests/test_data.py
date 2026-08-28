@@ -1,6 +1,6 @@
 import unittest
 from asyncio import run
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -105,6 +105,23 @@ class DataValidationTests(unittest.TestCase):
             "1-MINUTE-LAST",
             "1-MINUTE-LAST",
         ])
+        self.assertTrue(all(not unit.use_rth for unit in units))
+
+    def test_second_bar_units_are_opt_in_regular_hours_and_short_chunked(self) -> None:
+        units = download_units(
+            contracts=[ResolvedContract("MU", "MU.NASDAQ", 9939, "NASDAQ")],
+            start=datetime(2024, 1, 2, 14, 30, tzinfo=UTC),
+            end=datetime(2024, 1, 2, 15, 31, tzinfo=UTC),
+            hourly_chunk_days=30,
+            minute_chunk_days=30,
+            include_second_bars=True,
+            second_chunk_minutes=30,
+        )
+
+        second_units = [unit for unit in units if unit.bar_specification == "1-SECOND-LAST"]
+        self.assertEqual(len(second_units), 3)
+        self.assertTrue(all(unit.use_rth for unit in second_units))
+        self.assertEqual(second_units[0].end - second_units[0].start, timedelta(minutes=30))
 
     def test_completed_empty_unit_is_resumable(self) -> None:
         unit = download_units(
@@ -119,6 +136,17 @@ class DataValidationTests(unittest.TestCase):
             self.assertFalse(cached_unit_complete(directory, unit))
             mark_cached_unit_complete(directory, unit)
             self.assertTrue(cached_unit_complete(directory, unit))
+
+    def test_download_units_reject_invalid_range(self) -> None:
+        moment = datetime(2024, 1, 1, tzinfo=UTC)
+        with self.assertRaisesRegex(ValueError, "start must precede end"):
+            download_units(
+                contracts=[ResolvedContract("MU", "MU.NASDAQ", 9939, "NASDAQ")],
+                start=moment,
+                end=moment,
+                hourly_chunk_days=30,
+                minute_chunk_days=30,
+            )
 
     def test_hmds_no_data_completes_request_as_empty(self) -> None:
         class FakeIbClient:

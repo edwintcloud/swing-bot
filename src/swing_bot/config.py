@@ -5,6 +5,8 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
 
+from swing_bot.portfolio import PortfolioSettings
+
 
 @dataclass(frozen=True)
 class StrategySettings:
@@ -26,6 +28,33 @@ class StrategySettings:
         )
         if any(not 0 < value < 1 for value in fractions):
             raise ValueError("Strategy fractions must be greater than zero and less than one")
+
+
+@dataclass(frozen=True)
+class PriceAccelerationSettings:
+    acceleration_threshold: float = 0.0002
+    deceleration_threshold: float = 0.0001
+    flatline_threshold: float = 0.00002
+    flatline_bars: int = 3
+    trailing_stop_fraction: float = 0.0015
+    setup_expiry_seconds: int = 10
+    cooldown_seconds: int = 5
+
+    def __post_init__(self) -> None:
+        thresholds = (
+            self.acceleration_threshold,
+            self.deceleration_threshold,
+            self.flatline_threshold,
+            self.trailing_stop_fraction,
+        )
+        if any(not 0 < value < 1 for value in thresholds):
+            raise ValueError("Acceleration thresholds and trailing stop must be between zero and one")
+        if self.deceleration_threshold > self.acceleration_threshold:
+            raise ValueError("deceleration_threshold cannot exceed acceleration_threshold")
+        if self.flatline_bars <= 0:
+            raise ValueError("flatline_bars must be positive")
+        if self.setup_expiry_seconds <= 0 or self.cooldown_seconds < 0:
+            raise ValueError("Setup expiry must be positive and cooldown cannot be negative")
 
 
 @dataclass(frozen=True)
@@ -75,6 +104,12 @@ class AppConfig:
             raise ValueError("Symbols must be unique")
 
 
+@dataclass(frozen=True)
+class PortfolioConfig:
+    settings: PortfolioSettings
+    sectors: dict[str, str]
+
+
 def _read_toml(path: Path) -> dict[str, Any]:
     with path.open("rb") as file:
         return tomllib.load(file)
@@ -107,4 +142,39 @@ def load_config(config_dir: Path | str = "config") -> AppConfig:
         symbols=tuple(symbols),
         strategy=StrategySettings(**strategy_data),
         risk=RiskSettings(**risk_data),
+    )
+
+
+def load_price_acceleration_config(
+    config_dir: Path | str = "config",
+) -> PriceAccelerationSettings:
+    path = Path(config_dir) / "price_acceleration.toml"
+    data = _read_toml(path)
+    _reject_unknown_keys(data, PriceAccelerationSettings, path)
+    return PriceAccelerationSettings(**data)
+
+
+def load_portfolio_config(
+    symbols: tuple[str, ...], config_dir: Path | str = "config"
+) -> PortfolioConfig:
+    directory = Path(config_dir)
+    settings_path = directory / "portfolio.toml"
+    sectors_path = directory / "sectors.toml"
+    settings_data = _read_toml(settings_path)
+    sectors_data = _read_toml(sectors_path)
+    _reject_unknown_keys(settings_data, PortfolioSettings, settings_path)
+    if set(sectors_data) != {"sectors"} or not isinstance(sectors_data["sectors"], dict):
+        raise ValueError(f"{sectors_path} must contain only a sectors table")
+    sectors = sectors_data["sectors"]
+    if not all(isinstance(symbol, str) and isinstance(sector, str) for symbol, sector in sectors.items()):
+        raise ValueError("Sector names and symbols must be strings")
+    if set(sectors) != set(symbols):
+        missing = sorted(set(symbols) - set(sectors))
+        extra = sorted(set(sectors) - set(symbols))
+        raise ValueError(f"Sector map must match universe; missing={missing}, extra={extra}")
+    if any(not sector.strip() for sector in sectors.values()):
+        raise ValueError("Sector names cannot be empty")
+    return PortfolioConfig(
+        settings=PortfolioSettings(**settings_data),
+        sectors={symbol: sectors[symbol] for symbol in symbols},
     )

@@ -13,3 +13,4 @@ secrets/
 secrets/*
 !secrets/README.md
 data/
+.github/prompts

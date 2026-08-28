@@ -42,7 +42,7 @@ services:
     depends_on:
       ib-gateway:
         condition: service_healthy
-    command: ["paper", "--contracts", "/app/data/contracts.json"]
+    command: ["paper", "--contracts", "/app/data/contracts.json", "--strategy", "${TRADING_STRATEGY:-sma-continuation}"]
     environment:
       TRADING_MODE: paper
       TWS_ACCOUNT: ${TWS_ACCOUNT:?Set TWS_ACCOUNT in .env}

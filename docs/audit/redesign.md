@@ -1,6 +1,28 @@
 # Capital-Preservation Redesign Specification
 
-Status: recommendation only. This document does not change current paper or live behavior.
+Status: implemented as an opt-in strategy for backtest, paper, and live modes. The existing
+SMA strategy remains the default.
+
+## Implemented Research Slice
+
+The `portfolio-momentum` mode implements the first conservative slice of this
+specification: long-only cross-sectional momentum with a 252-session lookback and
+21-session skip, a 200-session absolute trend filter, 63-session volatility estimate,
+20-session median dollar-volume filter, inverse-volatility weighting, weekly rebalance,
+and explicit name, sector, gross, and position-count caps. Its configuration lives in
+`config/portfolio.toml` and `config/sectors.toml`.
+
+The strategy builds daily observations only from completed regular-session hourly bars
+and does not commit a day's close until the next session begins. Backtests apply one tick
+of adverse slippage to every fill and a $0.005 per-share commission.
+
+This remains an unpromoted strategy despite being executable in paper and live modes. It
+does not yet provide
+the broad point-in-time universe, delisting/corporate-action history, factor attribution,
+walk-forward protocol, nonlinear impact model, or decade-plus holdout evidence required
+below. Paper/live operation adds historical warmup, broker-equity sizing, order and
+position reconciliation, and dashboard pause/flatten controls; it does not satisfy the
+research promotion gates.
 
 ## Objective
 
