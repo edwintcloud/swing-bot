@@ -111,6 +111,11 @@ session-recovery procedure in `docs/runbook.md`; while diagnosing, add `--retrie
 `download-data` to avoid repeating a request IBKR will continue to reject. Changing the
 API client ID does not affect this account-level allocation.
 
+The running bot coalesces real-time error `420` bursts and performs a full data-client
+reconnect after 60 seconds. If the conflicting mobile or desktop session remains active,
+recovery repeats after subsequent rejection; log out of that session to release market
+data. Historical CLI downloads still require the manual recovery procedure above.
+
 See IBKR's current [market data pricing](https://www.interactivebrokers.com/en/pricing/research-news-marketdata.php)
 and [API market data requirements](https://ibkrcampus.com/docs/general/market-data-subscriptions.md)
 before subscribing, because offerings can change.

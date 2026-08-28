@@ -44,6 +44,7 @@ from swing_bot.telegram import (
 LIVE_ACKNOWLEDGEMENT = "I_UNDERSTAND_LIVE_ORDERS_ARE_REAL"
 IB_DIFFERENT_IP_RETRY_SECONDS = 60
 IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS = 15
+IB_CLIENT_ID_RELEASE_SECONDS = 2
 
 
 async def _recover_ib_market_data(ib_client: Any, state: dict[str, Any]) -> None:
@@ -53,7 +54,11 @@ async def _recover_ib_market_data(ib_client: Any, state: dict[str, Any]) -> None
             if getattr(ib_client, "_is_shutting_down", False):
                 return
             state["blocked"] = False
-            await ib_client._handle_reconnect()
+            await ib_client._stop_async()
+            await asyncio.sleep(IB_CLIENT_ID_RELEASE_SECONDS)
+            await ib_client._start_async()
+            await ib_client.wait_until_ready()
+            await ib_client._resubscribe_all()
             await asyncio.sleep(IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS)
     finally:
         state["task"] = None

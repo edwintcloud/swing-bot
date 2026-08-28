@@ -22,6 +22,13 @@ integrations, VPN changes, or a stale server-side allocation can affect the publ
 IBKR associates with it. Error `366` may follow because the rejected historical request
 is no longer active.
 
+For a running paper or live bot, real-time error `420` or historical error `162` with
+this message schedules one full IB data-client reconnect after 60 seconds. Repeated
+per-symbol errors are coalesced, and continued rejection schedules another attempt. The
+full reconnect closes the old socket before resubscribing so request IDs are not reused
+on an active connection. Log out of the conflicting session; no manual bot restart is
+normally required. The download commands remain manual and follow the procedure below.
+
 1. Stop the download with `Ctrl+C`.
 2. Disable VPN or proxy changes and keep the live and paper sessions on the same public
 	IP when sharing market-data subscriptions.

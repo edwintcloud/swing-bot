@@ -141,7 +141,7 @@ class NodeConfigTests(unittest.TestCase):
 
     def test_ib_different_ip_errors_schedule_one_full_reconnect(self) -> None:
         calls: list[int] = []
-        reconnects: list[bool] = []
+        recovery_steps: list[str] = []
         tasks: list[Task[None]] = []
 
         class FakeIbClient:
@@ -150,8 +150,17 @@ class NodeConfigTests(unittest.TestCase):
             async def process_error(self, **kwargs: object) -> None:
                 calls.append(int(kwargs["error_code"]))
 
-            async def _handle_reconnect(self) -> None:
-                reconnects.append(True)
+            async def _stop_async(self) -> None:
+                recovery_steps.append("stop")
+
+            async def _start_async(self) -> None:
+                recovery_steps.append("start")
+
+            async def wait_until_ready(self) -> None:
+                recovery_steps.append("ready")
+
+            async def _resubscribe_all(self) -> None:
+                recovery_steps.append("resubscribe")
 
             def _create_task(self, coroutine: object) -> Task[None]:
                 task = create_task(coroutine)
@@ -170,8 +179,10 @@ class NodeConfigTests(unittest.TestCase):
             patch("swing_bot.node.telegram_notifier", return_value=None),
             patch("swing_bot.node.IB_DIFFERENT_IP_RETRY_SECONDS", 0),
             patch("swing_bot.node.IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS", 0),
+            patch("swing_bot.node.IB_CLIENT_ID_RELEASE_SECONDS", 0),
         ):
             install_ib_error_notifications(node, "paper")
+
             async def trigger_recovery() -> None:
                 for req_id in (10009, 10010):
                     await ib_client.process_error(
@@ -188,7 +199,7 @@ class NodeConfigTests(unittest.TestCase):
             run(trigger_recovery())
 
         self.assertEqual(calls, [420, 420])
-        self.assertEqual(reconnects, [True])
+        self.assertEqual(recovery_steps, ["stop", "start", "ready", "resubscribe"])
 
     def test_report_writer_emits_summary(self) -> None:
         result = BacktestResult(
