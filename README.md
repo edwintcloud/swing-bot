@@ -56,11 +56,16 @@ make status
 make logs
 ```
 
-The dashboard is available at [http://localhost](http://localhost). It shows broker net
-liquidation, the persisted equity curve, closed trades, and open positions. Pause blocks
+The React operator console is available at [http://localhost](http://localhost). Its
+overview, positions, trades, and controls views show broker net liquidation, persisted
+equity, exposure, performance metrics, closed trades, and open positions. Pause blocks
 new entries without touching open positions. Flatten first pauses entries, cancels the
 strategy's working orders, and submits reduce-only GTC limit exits with a 5% marketable
 price collar. A command is acknowledged only after the bot process consumes it.
+
+For frontend development, run `cd ui && npm install && npm run dev`; Vite proxies API and
+health requests to a dashboard server listening on port 8080. Production assets are
+built into the Docker image.
 
 The dashboard binds only to `127.0.0.1:80`. Set `DASHBOARD_PASSWORD` in `.env` to enable
 HTTP Basic authentication; `DASHBOARD_USERNAME` defaults to `admin`. Do not expose the

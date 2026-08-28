@@ -13,3 +13,5 @@ runtime
 secrets
 tests
 tools
+ui/dist
+ui/node_modules

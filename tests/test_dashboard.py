@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from swing_bot.dashboard import INDEX_HTML
+from swing_bot.dashboard import resolve_static_asset
 from swing_bot.dashboard_bridge import DashboardBridge, dashboard_payload, enqueue_command
 
 
@@ -41,13 +41,20 @@ class DashboardBridgeTests(unittest.TestCase):
             self.assertFalse((path / "bad.json").exists())
 
     def test_position_flatten_control_targets_one_instrument(self) -> None:
-        self.assertIn('data-instrument="${esc(p.instrument_id)}"', INDEX_HTML)
-        self.assertIn("command('/api/flatten',{instrument_id:b.dataset.instrument})", INDEX_HTML)
         with TemporaryDirectory() as directory:
             enqueue_command(directory, "flatten", {"instrument_id": "NBIS.NASDAQ"})
             command = DashboardBridge(directory).read_commands()[0]
             self.assertEqual(command.action, "flatten")
             self.assertEqual(command.payload, {"instrument_id": "NBIS.NASDAQ"})
+
+    def test_static_assets_are_confined_to_build_directory(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory) / "dist"
+            root.mkdir()
+            index = root / "index.html"
+            index.write_text("<div id=\"root\"></div>", encoding="ascii")
+            self.assertEqual(resolve_static_asset(root, "/"), index.resolve())
+            self.assertIsNone(resolve_static_asset(root, "/../secret"))
 
 
 if __name__ == "__main__":
