@@ -39,7 +39,7 @@ class DashboardBridge:
         self.paused = bool(previous.get("paused", False))
         self.last_command = previous.get("last_command")
         self._last_equity_bucket = self._read_last_equity_bucket()
-        self._trade_ids = self._read_trade_ids()
+        self._trade_keys = self._read_trade_keys()
 
     def read_state(self) -> dict[str, Any]:
         try:
@@ -100,11 +100,11 @@ class DashboardBridge:
                 self._last_equity_bucket = bucket
 
     def record_trade(self, trade: dict[str, Any]) -> None:
-        trade_id = str(trade.get("position_id", ""))
-        if not trade_id or trade_id in self._trade_ids:
+        trade_key = self._trade_key(trade)
+        if trade_key is None or trade_key in self._trade_keys:
             return
         self._append_json_line(self.trades_path, trade)
-        self._trade_ids.add(trade_id)
+        self._trade_keys.add(trade_key)
 
     def _append_json_line(self, path: Path, value: dict[str, Any]) -> None:
         with path.open("a", encoding="utf-8") as output:
@@ -122,11 +122,19 @@ class DashboardBridge:
             return None
         return int(timestamp.timestamp() * 1_000_000_000) // 60_000_000_000
 
-    def _read_trade_ids(self) -> set[str]:
+    @staticmethod
+    def _trade_key(trade: dict[str, Any]) -> tuple[str, str] | None:
+        position_id = trade.get("position_id")
+        closed_at = trade.get("closed_at")
+        if not position_id or not closed_at:
+            return None
+        return str(position_id), str(closed_at)
+
+    def _read_trade_keys(self) -> set[tuple[str, str]]:
         return {
-            str(record["position_id"])
+            key
             for record in read_json_lines(self.trades_path)
-            if record.get("position_id")
+            if (key := self._trade_key(record)) is not None
         }
 
 
@@ -178,5 +186,9 @@ def dashboard_payload(root: Path | str) -> dict[str, Any]:
             "last_command": None,
         }
     state["equity_curve"] = read_json_lines(bridge_root / "equity.jsonl", limit=2_000)
-    state["trades"] = list(reversed(read_json_lines(bridge_root / "trades.jsonl", limit=1_000)))
+    state["trades"] = sorted(
+        read_json_lines(bridge_root / "trades.jsonl", limit=1_000),
+        key=lambda trade: str(trade.get("closed_at", "")),
+        reverse=True,
+    )
     return state

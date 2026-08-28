@@ -19,18 +19,30 @@ class DashboardBridgeTests(unittest.TestCase):
             bridge.publish(timestamp_ns=60_000_000_000, equity=100_000, positions=[], status="running")
             self.assertTrue(DashboardBridge(directory).paused)
 
-    def test_equity_is_sampled_once_per_minute_and_trades_are_deduplicated(self) -> None:
+    def test_equity_is_sampled_once_per_minute_and_trade_closes_are_deduplicated(self) -> None:
         with TemporaryDirectory() as directory:
             bridge = DashboardBridge(directory)
             bridge.publish(timestamp_ns=60_000_000_000, equity=100_000, positions=[], status="running")
             bridge.publish(timestamp_ns=61_000_000_000, equity=100_100, positions=[], status="running")
             bridge.publish(timestamp_ns=120_000_000_000, equity=100_200, positions=[], status="running")
-            trade = {"position_id": "P-1", "realized_pnl": 200}
+            trade = {
+                "position_id": "P-1",
+                "closed_at": "2026-08-28T15:00:00+00:00",
+                "realized_pnl": 200,
+            }
             bridge.record_trade(trade)
             bridge.record_trade(trade)
+            bridge.record_trade(
+                {
+                    "position_id": "P-1",
+                    "closed_at": "2026-08-28T16:00:00+00:00",
+                    "realized_pnl": 100,
+                }
+            )
             payload = dashboard_payload(directory)
             self.assertEqual(len(payload["equity_curve"]), 2)
-            self.assertEqual(len(payload["trades"]), 1)
+            self.assertEqual(len(payload["trades"]), 2)
+            self.assertEqual(payload["trades"][0]["closed_at"], "2026-08-28T16:00:00+00:00")
 
     def test_corrupt_command_is_removed_without_execution(self) -> None:
         with TemporaryDirectory() as directory:
