@@ -1,5 +1,5 @@
 import unittest
-from asyncio import Task, create_task, run
+from asyncio import run
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -139,24 +139,12 @@ class NodeConfigTests(unittest.TestCase):
         self.assertEqual(calls, [2103, 2104])
         self.assertEqual(messages, [])
 
-    def test_ib_different_ip_error_retries_market_data_subscriptions(self) -> None:
+    def test_ib_different_ip_error_is_delegated_without_resubscription(self) -> None:
         calls: list[int] = []
-        resubscriptions: list[bool] = []
-        tasks: list[Task[None]] = []
 
         class FakeIbClient:
-            _is_shutting_down = False
-
             async def process_error(self, **kwargs: object) -> None:
                 calls.append(int(kwargs["error_code"]))
-
-            async def _resubscribe_all(self) -> None:
-                resubscriptions.append(True)
-
-            def _create_task(self, coroutine: object) -> Task[None]:
-                task = create_task(coroutine)
-                tasks.append(task)
-                return task
 
         ib_client = FakeIbClient()
         node = SimpleNamespace(
@@ -166,18 +154,10 @@ class NodeConfigTests(unittest.TestCase):
                 )
             )
         )
-        with (
-            patch(
-                "swing_bot.node.telegram_notifier",
-                return_value=None,
-            ),
-            patch("swing_bot.node.IB_DIFFERENT_IP_RETRY_SECONDS", 0),
-            patch("swing_bot.node.IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS", 0),
-        ):
+        with patch("swing_bot.node.telegram_notifier", return_value=None):
             install_ib_error_notifications(node, "paper")
-
-            async def trigger_recovery() -> None:
-                await ib_client.process_error(
+            run(
+                ib_client.process_error(
                     req_id=10009,
                     error_time=0,
                     error_code=162,
@@ -186,12 +166,9 @@ class NodeConfigTests(unittest.TestCase):
                         "Trading TWS session is connected from a different IP address"
                     ),
                 )
-                await tasks[0]
-
-            run(trigger_recovery())
+            )
 
         self.assertEqual(calls, [162])
-        self.assertEqual(resubscriptions, [True])
 
     def test_report_writer_emits_summary(self) -> None:
         result = BacktestResult(
