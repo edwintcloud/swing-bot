@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -41,6 +42,21 @@ from swing_bot.telegram import (
 )
 
 LIVE_ACKNOWLEDGEMENT = "I_UNDERSTAND_LIVE_ORDERS_ARE_REAL"
+IB_DIFFERENT_IP_RETRY_SECONDS = 60
+IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS = 15
+
+
+async def _recover_ib_market_data(ib_client: Any, state: dict[str, Any]) -> None:
+    try:
+        while state["blocked"] and not getattr(ib_client, "_is_shutting_down", False):
+            await asyncio.sleep(IB_DIFFERENT_IP_RETRY_SECONDS)
+            if getattr(ib_client, "_is_shutting_down", False):
+                return
+            state["blocked"] = False
+            await ib_client._handle_reconnect()
+            await asyncio.sleep(IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS)
+    finally:
+        state["task"] = None
 
 
 @dataclass(frozen=True)
@@ -207,6 +223,7 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
             continue
         original = ib_client.process_error
         connection_state = {"disconnected": False}
+        different_ip_state: dict[str, Any] = {"blocked": False, "task": None}
 
         async def process_error(
             self: Any,
@@ -218,6 +235,7 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
             advanced_order_reject_json: str = "",
             _original: Any = original,
             _state: dict[str, bool] = connection_state,
+            _different_ip_state: dict[str, Any] = different_ip_state,
         ) -> None:
             full_disconnect = error_code in {1100, 1300, 2110}
             reconnected = error_code in {1101, 1102}
@@ -240,5 +258,15 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
                 error_string=error_string,
                 advanced_order_reject_json=advanced_order_reject_json,
             )
+            different_ip = (
+                error_code in {162, 420} and "different IP address" in error_string
+            )
+            if different_ip:
+                _different_ip_state["blocked"] = True
+                task = _different_ip_state["task"]
+                if task is None or task.done():
+                    _different_ip_state["task"] = self._create_task(
+                        _recover_ib_market_data(self, _different_ip_state)
+                    )
 
         ib_client.process_error = MethodType(process_error, ib_client)
