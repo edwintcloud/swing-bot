@@ -34,12 +34,14 @@ class StrategySettings:
 class PriceAccelerationSettings:
     bar_interval_seconds: int = 5
     acceleration_threshold: float = 0.0002
+    acceleration_confirmation_bars: int = 2
     deceleration_threshold: float = 0.0001
     flatline_threshold: float = 0.00002
     flatline_bars: int = 3
     trailing_stop_fraction: float = 0.0015
     setup_expiry_seconds: int = 10
     cooldown_seconds: int = 5
+    market_open_delay_minutes: int = 15
 
     def __post_init__(self) -> None:
         if self.bar_interval_seconds <= 0:
@@ -54,10 +56,14 @@ class PriceAccelerationSettings:
             raise ValueError("Acceleration thresholds and trailing stop must be between zero and one")
         if self.deceleration_threshold > self.acceleration_threshold:
             raise ValueError("deceleration_threshold cannot exceed acceleration_threshold")
+        if self.acceleration_confirmation_bars <= 0:
+            raise ValueError("acceleration_confirmation_bars must be positive")
         if self.flatline_bars <= 0:
             raise ValueError("flatline_bars must be positive")
         if self.setup_expiry_seconds <= 0 or self.cooldown_seconds < 0:
             raise ValueError("Setup expiry must be positive and cooldown cannot be negative")
+        if not 0 <= self.market_open_delay_minutes < 390:
+            raise ValueError("market_open_delay_minutes must be between zero and 389")
 
 
 @dataclass(frozen=True)

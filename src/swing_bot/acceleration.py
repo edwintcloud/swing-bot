@@ -24,6 +24,8 @@ class AccelerationTracker:
         self.previous_close: float | None = None
         self.previous_velocity: float | None = None
         self.previous_timestamp_ns: int | None = None
+        self.confirmation_signal = Signal.NONE
+        self.confirmation_count = 0
         self.armed_signal = Signal.NONE
         self.armed_at_ns: int | None = None
         self.peak_directional_acceleration = 0.0
@@ -102,13 +104,34 @@ class AccelerationTracker:
             else Signal.NONE
         )
         if candidate is not Signal.NONE and candidate is not self.armed_signal:
+            if self.armed_signal is not Signal.NONE:
+                self._reset_setup()
+            if candidate is self.confirmation_signal:
+                self.confirmation_count += 1
+            else:
+                self.confirmation_signal = candidate
+                self.confirmation_count = 1
+            if self.confirmation_count < self.settings.acceleration_confirmation_bars:
+                return AccelerationEvaluation(
+                    velocity=velocity,
+                    acceleration=acceleration,
+                    reason=(
+                        f"{candidate.value} setup confirmation "
+                        f"{self.confirmation_count}/"
+                        f"{self.settings.acceleration_confirmation_bars}"
+                    ),
+                )
             self.armed_signal = candidate
             self.armed_at_ns = timestamp_ns
             self.peak_directional_acceleration = abs(acceleration)
+            self.confirmation_signal = Signal.NONE
+            self.confirmation_count = 0
             return AccelerationEvaluation(
                 velocity=velocity, acceleration=acceleration, reason=f"{candidate.value} setup armed"
             )
         if self.armed_signal is Signal.NONE:
+            self.confirmation_signal = Signal.NONE
+            self.confirmation_count = 0
             return AccelerationEvaluation(
                 velocity=velocity, acceleration=acceleration, reason="acceleration threshold not met"
             )
@@ -150,6 +173,8 @@ class AccelerationTracker:
         )
 
     def _reset_setup(self) -> None:
+        self.confirmation_signal = Signal.NONE
+        self.confirmation_count = 0
         self.armed_signal = Signal.NONE
         self.armed_at_ns = None
         self.peak_directional_acceleration = 0.0

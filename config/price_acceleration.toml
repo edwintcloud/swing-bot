@@ -1,8 +1,10 @@
 bar_interval_seconds = 5
 acceleration_threshold = 0.0002
+acceleration_confirmation_bars = 2
 deceleration_threshold = 0.0001
 flatline_threshold = 0.00002
 flatline_bars = 3
 trailing_stop_fraction = 0.0015
 setup_expiry_seconds = 10
 cooldown_seconds = 5
+market_open_delay_minutes = 15

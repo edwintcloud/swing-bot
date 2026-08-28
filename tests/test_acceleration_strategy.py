@@ -5,6 +5,7 @@ from swing_bot.acceleration_strategy import (
     ACCELERATION_ENTRY_TAG,
     ACCELERATION_FLATLINE_EXIT_TAG,
     build_acceleration_entry_plan,
+    is_entry_session,
     is_flatline_exit_order,
     is_regular_session,
 )
@@ -54,6 +55,15 @@ class AccelerationEntryPlanTests(unittest.TestCase):
         self.assertFalse(is_regular_session(timestamp("2026-08-28T09:29:59-04:00")))
         self.assertFalse(is_regular_session(timestamp("2026-08-28T16:00:00-04:00")))
         self.assertFalse(is_regular_session(timestamp("2026-08-29T12:00:00-04:00")))
+
+    def test_entry_session_skips_first_fifteen_minutes(self) -> None:
+        def timestamp(value: str) -> int:
+            parsed = datetime.fromisoformat(value).astimezone(UTC)
+            return int(parsed.timestamp() * 1_000_000_000)
+
+        self.assertFalse(is_entry_session(timestamp("2026-08-28T09:44:59-04:00"), 15))
+        self.assertTrue(is_entry_session(timestamp("2026-08-28T09:45:00-04:00"), 15))
+        self.assertFalse(is_entry_session(timestamp("2026-08-28T16:00:00-04:00"), 15))
 
 
 if __name__ == "__main__":

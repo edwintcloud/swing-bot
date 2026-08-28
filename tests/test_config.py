@@ -48,8 +48,10 @@ class ConfigTests(unittest.TestCase):
         settings = load_price_acceleration_config()
         self.assertEqual(settings.bar_interval_seconds, 5)
         self.assertEqual(settings.acceleration_threshold, 0.0002)
+        self.assertEqual(settings.acceleration_confirmation_bars, 2)
         self.assertEqual(settings.flatline_bars, 3)
         self.assertEqual(settings.trailing_stop_fraction, 0.0015)
+        self.assertEqual(settings.market_open_delay_minutes, 15)
 
     def test_acceleration_deceleration_cannot_exceed_arm_threshold(self) -> None:
         with self.assertRaisesRegex(ValueError, "deceleration_threshold"):
@@ -57,6 +59,12 @@ class ConfigTests(unittest.TestCase):
                 acceleration_threshold=0.01,
                 deceleration_threshold=0.02,
             )
+
+    def test_acceleration_noise_filters_are_validated(self) -> None:
+        with self.assertRaisesRegex(ValueError, "acceleration_confirmation_bars"):
+            PriceAccelerationSettings(acceleration_confirmation_bars=0)
+        with self.assertRaisesRegex(ValueError, "market_open_delay_minutes"):
+            PriceAccelerationSettings(market_open_delay_minutes=390)
 
     def test_unknown_strategy_key_is_rejected(self) -> None:
         with TemporaryDirectory() as directory_name:

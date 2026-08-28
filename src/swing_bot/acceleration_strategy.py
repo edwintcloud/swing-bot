@@ -60,6 +60,19 @@ def is_regular_session(timestamp_ns: int) -> bool:
     )
 
 
+def is_entry_session(timestamp_ns: int, market_open_delay_minutes: int) -> bool:
+    if not is_regular_session(timestamp_ns):
+        return False
+    local = datetime.fromtimestamp(timestamp_ns / 1_000_000_000, tz=UTC).astimezone(
+        NEW_YORK
+    )
+    minute_of_day = local.hour * 60 + local.minute
+    session_start_minute = (
+        REGULAR_SESSION_START.hour * 60 + REGULAR_SESSION_START.minute
+    )
+    return minute_of_day >= session_start_minute + market_open_delay_minutes
+
+
 class PriceAccelerationConfig(SwingReversalConfig, frozen=True):
     acceleration_settings: dict[str, Any] | None = None
 
@@ -90,6 +103,11 @@ class PriceAccelerationStrategy(SwingReversalStrategy):
         positions = self.cache.positions_open(
             instrument_id=instrument_id, strategy_id=self.id
         )
+        if not positions and not is_entry_session(
+            timestamp_ns, self._acceleration_settings.market_open_delay_minutes
+        ):
+            tracker.reset_session()
+            return
         if positions and tracker.position_signal is Signal.NONE:
             tracker.position_opened(Signal.LONG if positions[0].is_long else Signal.SHORT)
         evaluation = tracker.update(bar.close.as_double(), timestamp_ns)

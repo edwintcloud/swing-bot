@@ -33,17 +33,22 @@ class AccelerationTrackerTests(unittest.TestCase):
         return result
 
     def test_long_arms_then_enters_on_peak_deceleration(self) -> None:
-        result = self.update_returns([0.0, 0.02, 0.03])
+        result = self.update_returns([0.0, 0.02, 0.05, 0.06])
         self.assertEqual(result.signal, Signal.LONG)
-        self.assertAlmostEqual(result.velocity or 0, 0.03)
+        self.assertAlmostEqual(result.velocity or 0, 0.06)
         self.assertAlmostEqual(result.acceleration or 0, 0.01)
 
+    def test_single_acceleration_spike_does_not_arm_setup(self) -> None:
+        result = self.update_returns([0.0, 0.02, 0.03])
+        self.assertEqual(result.signal, Signal.NONE)
+        self.assertEqual(self.tracker.armed_signal, Signal.NONE)
+
     def test_short_is_symmetric(self) -> None:
-        result = self.update_returns([0.0, -0.02, -0.03])
+        result = self.update_returns([0.0, -0.02, -0.05, -0.06])
         self.assertEqual(result.signal, Signal.SHORT)
 
     def test_deceleration_does_not_enter_after_velocity_reverses(self) -> None:
-        result = self.update_returns([0.0, 0.02, -0.01])
+        result = self.update_returns([0.0, 0.02, 0.05, -0.01])
         self.assertEqual(result.signal, Signal.NONE)
 
     def test_setup_expires_at_boundary(self) -> None:
@@ -94,7 +99,8 @@ class AccelerationTrackerTests(unittest.TestCase):
         self.second = 10
         self.update_returns([0.0, 0.02])
         self.assertEqual(self.tracker.armed_signal, Signal.NONE)
-        result = self.update_returns([0.0, 0.0, 0.0, 0.02])
+        self.update_returns([0.0, 0.0, 0.0, 0.02])
+        result = self.update_returns([0.05])
         self.assertEqual(result.reason, "LONG setup armed")
 
 
