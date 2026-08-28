@@ -27,7 +27,9 @@ this message schedules one full IB data-client reconnect after 60 seconds. Repea
 per-symbol errors are coalesced, and continued rejection schedules another attempt. The
 full reconnect closes the old socket before resubscribing so request IDs are not reused
 on an active connection. Log out of the conflicting session; no manual bot restart is
-normally required. The download commands remain manual and follow the procedure below.
+normally required. Data-farm recovery (`2103`/`2105` followed by `2104`/`2106`) uses the
+same serialized full reconnect instead of replaying active request IDs. The download
+commands remain manual and follow the procedure below.
 
 1. Stop the download with `Ctrl+C`.
 2. Disable VPN or proxy changes and keep the live and paper sessions on the same public

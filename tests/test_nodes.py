@@ -100,10 +100,28 @@ class NodeConfigTests(unittest.TestCase):
     def test_ib_market_data_farm_cycle_is_not_notified(self) -> None:
         calls: list[int] = []
         messages: list[str] = []
+        recovery_steps: list[str] = []
 
         class FakeIbClient:
+            _data_farm_degraded_since_ns = 1
+
             async def process_error(self, **kwargs: object) -> None:
                 calls.append(int(kwargs["error_code"]))
+
+            async def _resubscribe_after_farm_recovery(self) -> None:
+                raise AssertionError("unsafe farm recovery was not replaced")
+
+            async def _stop_async(self) -> None:
+                recovery_steps.append("stop")
+
+            async def _start_async(self) -> None:
+                recovery_steps.append("start")
+
+            async def wait_until_ready(self) -> None:
+                recovery_steps.append("ready")
+
+            async def _resubscribe_all(self) -> None:
+                recovery_steps.append("resubscribe")
 
         ib_client = FakeIbClient()
         node = SimpleNamespace(
@@ -113,9 +131,12 @@ class NodeConfigTests(unittest.TestCase):
                 )
             )
         )
-        with patch(
-            "swing_bot.node.telegram_notifier",
-            return_value=SimpleNamespace(send=messages.append),
+        with (
+            patch(
+                "swing_bot.node.telegram_notifier",
+                return_value=SimpleNamespace(send=messages.append),
+            ),
+            patch("swing_bot.node.IB_CLIENT_ID_RELEASE_SECONDS", 0),
         ):
             install_ib_error_notifications(node, "paper")
 
@@ -135,9 +156,12 @@ class NodeConfigTests(unittest.TestCase):
                 error_string="Market data farm connection is OK",
             )
         )
+        run(ib_client._resubscribe_after_farm_recovery())
 
         self.assertEqual(calls, [2103, 2104])
         self.assertEqual(messages, [])
+        self.assertEqual(recovery_steps, ["stop", "start", "ready", "resubscribe"])
+        self.assertIsNone(ib_client._data_farm_degraded_since_ns)
 
     def test_ib_different_ip_errors_schedule_one_full_reconnect(self) -> None:
         calls: list[int] = []

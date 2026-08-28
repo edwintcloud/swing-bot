@@ -47,6 +47,15 @@ IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS = 15
 IB_CLIENT_ID_RELEASE_SECONDS = 2
 
 
+async def _restart_ib_market_data(ib_client: Any, lock: asyncio.Lock) -> None:
+    async with lock:
+        await ib_client._stop_async()
+        await asyncio.sleep(IB_CLIENT_ID_RELEASE_SECONDS)
+        await ib_client._start_async()
+        await ib_client.wait_until_ready()
+        await ib_client._resubscribe_all()
+
+
 async def _recover_ib_market_data(ib_client: Any, state: dict[str, Any]) -> None:
     try:
         while state["blocked"] and not getattr(ib_client, "_is_shutting_down", False):
@@ -54,11 +63,7 @@ async def _recover_ib_market_data(ib_client: Any, state: dict[str, Any]) -> None
             if getattr(ib_client, "_is_shutting_down", False):
                 return
             state["blocked"] = False
-            await ib_client._stop_async()
-            await asyncio.sleep(IB_CLIENT_ID_RELEASE_SECONDS)
-            await ib_client._start_async()
-            await ib_client.wait_until_ready()
-            await ib_client._resubscribe_all()
+            await _restart_ib_market_data(ib_client, state["lock"])
             await asyncio.sleep(IB_DIFFERENT_IP_RECOVERY_GRACE_SECONDS)
     finally:
         state["task"] = None
@@ -228,7 +233,25 @@ def install_ib_error_notifications(node: TradingNode, mode: str) -> None:
             continue
         original = ib_client.process_error
         connection_state = {"disconnected": False}
-        different_ip_state: dict[str, Any] = {"blocked": False, "task": None}
+        recovery_lock = asyncio.Lock()
+        different_ip_state: dict[str, Any] = {
+            "blocked": False,
+            "task": None,
+            "lock": recovery_lock,
+        }
+
+        if hasattr(ib_client, "_resubscribe_after_farm_recovery"):
+            async def recover_after_farm(
+                self: Any, _recovery_lock: asyncio.Lock = recovery_lock
+            ) -> None:
+                try:
+                    await _restart_ib_market_data(self, _recovery_lock)
+                finally:
+                    self._data_farm_degraded_since_ns = None
+
+            ib_client._resubscribe_after_farm_recovery = MethodType(
+                recover_after_farm, ib_client
+            )
 
         async def process_error(
             self: Any,
