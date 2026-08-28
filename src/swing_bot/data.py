@@ -349,6 +349,19 @@ async def download_history(
                         timeout=timeout,
                     ),
                 )
+                if bars:
+                    returned_instruments = {
+                        str(bar.bar_type.instrument_id) for bar in bars
+                    }
+                    expected_instruments = {
+                        contract.instrument_id for contract in contracts
+                    }
+                    missing_instruments = expected_instruments - returned_instruments
+                    if missing_instruments:
+                        missing = ", ".join(sorted(missing_instruments))
+                        raise RuntimeError(
+                            f"Historical batch omitted requested instruments: {missing}"
+                        )
                 _write_cached_unit(resolved_cache_path, unit, bars)
                 downloaded.extend(bars)
                 break

@@ -42,7 +42,10 @@ class DataValidationTests(unittest.TestCase):
                 return [
                     SimpleNamespace(
                         timestamp=self.requests,
-                        bar_type=str(kwargs["bar_specifications"][0]),
+                        bar_type=SimpleNamespace(
+                            instrument_id="MU.NASDAQ",
+                            specification=str(kwargs["bar_specifications"][0]),
+                        ),
                     )
                 ]
 
@@ -85,6 +88,42 @@ class DataValidationTests(unittest.TestCase):
 
         self.assertEqual(first_client.requests, 4)
         self.assertEqual(second_client.requests, 0)
+
+    def test_download_history_rejects_partial_multi_contract_batch(self) -> None:
+        class FakeClient:
+            async def connect(self) -> None:
+                pass
+
+            async def request_instruments(self, **_kwargs: object) -> list[str]:
+                return ["instrument"]
+
+            async def request_bars(self, **_kwargs: object) -> list[SimpleNamespace]:
+                return [
+                    SimpleNamespace(
+                        bar_type=SimpleNamespace(instrument_id="MU.NASDAQ")
+                    )
+                ]
+
+        contracts = [
+            ResolvedContract("MU", "MU.NASDAQ", 9939, "NASDAQ"),
+            ResolvedContract("AMD", "AMD.NASDAQ", 4391, "NASDAQ"),
+        ]
+        with TemporaryDirectory() as directory, patch(
+            "swing_bot.data._replace_catalog"
+        ), patch("swing_bot.data.validate_bar_records"), self.assertRaisesRegex(
+            RuntimeError, "omitted requested instruments: AMD.NASDAQ"
+        ):
+            run(
+                download_history(
+                    contracts=contracts,
+                    start=datetime(2024, 1, 1, tzinfo=UTC),
+                    end=datetime(2024, 1, 2, tzinfo=UTC),
+                    catalog_path=Path(directory) / "catalog",
+                    cache_path=Path(directory) / "cache",
+                    client_factory=FakeClient,
+                    retries=0,
+                )
+            )
 
     def test_download_units_use_separate_bar_intervals(self) -> None:
         contracts = [ResolvedContract("MU", "MU.NASDAQ", 9939, "NASDAQ")]
