@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 from swing_bot.config import PriceAccelerationSettings
 from swing_bot.signals import Signal
@@ -16,6 +17,33 @@ class AccelerationEvaluation:
     velocity: float | None = None
     acceleration: float | None = None
     reason: str = ""
+
+
+class SessionLossGuard:
+    def __init__(self, max_consecutive_losses: int) -> None:
+        if max_consecutive_losses <= 0:
+            raise ValueError("max_consecutive_losses must be positive")
+        self.max_consecutive_losses = max_consecutive_losses
+        self.session_date: date | None = None
+        self.consecutive_losses: dict[str, int] = {}
+
+    def entry_allowed(self, instrument_id: str, session_date: date) -> bool:
+        self._roll_session(session_date)
+        return self.consecutive_losses.get(instrument_id, 0) < self.max_consecutive_losses
+
+    def record_close(self, instrument_id: str, session_date: date, realized_pnl: float) -> None:
+        self._roll_session(session_date)
+        if realized_pnl < 0:
+            self.consecutive_losses[instrument_id] = (
+                self.consecutive_losses.get(instrument_id, 0) + 1
+            )
+        else:
+            self.consecutive_losses.pop(instrument_id, None)
+
+    def _roll_session(self, session_date: date) -> None:
+        if self.session_date != session_date:
+            self.session_date = session_date
+            self.consecutive_losses.clear()
 
 
 class AccelerationTracker:
@@ -146,7 +174,7 @@ class AccelerationTracker:
             + FLOAT_TOLERANCE
             >= self.settings.deceleration_threshold
         )
-        if decelerated and direction * velocity > 0:
+        if decelerated and direction * velocity >= self.settings.minimum_velocity:
             signal = self.armed_signal
             self._reset_setup()
             return AccelerationEvaluation(

@@ -124,7 +124,11 @@ def validate_bar_records(
         if timestamps != sorted(timestamps) or len(timestamps) != len(set(timestamps)):
             raise ValueError(f"Timestamps must be unique and monotonic for {bar_type}")
         counts[bar_type] = len(values)
-        if "1-HOUR-" in bar_type and len(values) < minimum_hourly_bars:
+        if (
+            minimum_hourly_bars > 0
+            and "1-HOUR-" in bar_type
+            and len(values) < minimum_hourly_bars
+        ):
             raise ValueError(
                 f"Hourly warmup requires {minimum_hourly_bars} bars for {bar_type}"
             )
@@ -360,7 +364,10 @@ async def download_history(
     ordered = sorted(unique.values(), key=lambda item: (item[1].bar_type, item[1].ts_init))
     bars = [item[0] for item in ordered]
     records = [item[1] for item in ordered]
-    validate_bar_records(records)
+    validate_bar_records(
+        records,
+        minimum_hourly_bars=0 if include_second_bars else 220,
+    )
     from nautilus_trader import __version__ as nautilus_version
 
     manifest = build_manifest(

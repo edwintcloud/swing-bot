@@ -19,6 +19,20 @@ class DashboardBridgeTests(unittest.TestCase):
             bridge.publish(timestamp_ns=60_000_000_000, equity=100_000, positions=[], status="running")
             self.assertTrue(DashboardBridge(directory).paused)
 
+    def test_risk_references_are_persisted_in_state(self) -> None:
+        with TemporaryDirectory() as directory:
+            bridge = DashboardBridge(directory)
+            references = {"day_start_equity": 100_000.0}
+            bridge.publish(
+                timestamp_ns=60_000_000_000,
+                equity=99_000,
+                positions=[],
+                status="running",
+                risk_references=references,
+            )
+
+            self.assertEqual(bridge.read_state()["risk_references"], references)
+
     def test_equity_is_sampled_once_per_minute_and_trade_closes_are_deduplicated(self) -> None:
         with TemporaryDirectory() as directory:
             bridge = DashboardBridge(directory)

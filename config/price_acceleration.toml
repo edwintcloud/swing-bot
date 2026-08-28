@@ -1,10 +1,12 @@
 bar_interval_seconds = 5
-acceleration_threshold = 0.00002
+acceleration_threshold = 0.00001
+minimum_velocity = 0.0001
 acceleration_confirmation_bars = 2
-deceleration_threshold = 0.00001
+deceleration_threshold = 0.0000075
 flatline_threshold = 0.000004
 flatline_bars = 3
-trailing_stop_fraction = 0.0015
+trailing_stop_fraction = 0.004
 setup_expiry_seconds = 10
-cooldown_seconds = 5
+cooldown_seconds = 300
 market_open_delay_minutes = 15
+max_consecutive_losses_per_instrument = 2

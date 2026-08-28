@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from math import floor, isfinite
 
 from swing_bot.config import RiskSettings
@@ -40,7 +40,7 @@ class EquityReferences:
     day_start_equity: float
     week_start_equity: float
     high_water_equity: float
-    day: object
+    day: date
     week: tuple[int, int]
 
     @classmethod
@@ -64,6 +64,41 @@ class EquityReferences:
         self.equity = equity
         if track_high_water:
             self.high_water_equity = max(self.high_water_equity, equity)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "equity": self.equity,
+            "day_start_equity": self.day_start_equity,
+            "week_start_equity": self.week_start_equity,
+            "high_water_equity": self.high_water_equity,
+            "day": self.day.isoformat(),
+            "week": list(self.week),
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, object]) -> EquityReferences:
+        week = value["week"]
+        if not isinstance(week, list) or len(week) != 2:
+            raise ValueError("Persisted equity week must contain year and week")
+        references = cls(
+            equity=float(value["equity"]),
+            day_start_equity=float(value["day_start_equity"]),
+            week_start_equity=float(value["week_start_equity"]),
+            high_water_equity=float(value["high_water_equity"]),
+            day=date.fromisoformat(str(value["day"])),
+            week=(int(week[0]), int(week[1])),
+        )
+        if not all(
+            isfinite(item) and item > 0
+            for item in (
+                references.equity,
+                references.day_start_equity,
+                references.week_start_equity,
+                references.high_water_equity,
+            )
+        ):
+            raise ValueError("Persisted equity references must be finite and positive")
+        return references
 
 
 def calculate_position_size(

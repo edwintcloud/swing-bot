@@ -123,6 +123,15 @@ class DataValidationTests(unittest.TestCase):
         self.assertTrue(all(unit.use_rth for unit in second_units))
         self.assertEqual(second_units[0].end - second_units[0].start, timedelta(minutes=30))
 
+    def test_second_bar_research_can_skip_hourly_warmup_minimum(self) -> None:
+        counts = validate_bar_records(
+            [record(1), record(2, bar_type="MU.NASDAQ-5-SECOND-LAST-EXTERNAL")],
+            minimum_hourly_bars=0,
+        )
+
+        self.assertEqual(counts["MU.NASDAQ-1-HOUR-LAST-EXTERNAL"], 1)
+        self.assertEqual(counts["MU.NASDAQ-5-SECOND-LAST-EXTERNAL"], 1)
+
     def test_completed_empty_unit_is_resumable(self) -> None:
         unit = download_units(
             contracts=[ResolvedContract("MU", "MU.NASDAQ", 9939, "NASDAQ")],

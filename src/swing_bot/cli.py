@@ -19,7 +19,12 @@ from swing_bot.config import (
     load_portfolio_config,
     load_price_acceleration_config,
 )
-from swing_bot.contracts import discover_contracts, load_resolved_contracts, save_resolved_contracts
+from swing_bot.contracts import (
+    discover_contracts,
+    load_resolved_contracts,
+    save_resolved_contracts,
+    select_resolved_contracts,
+)
 from swing_bot.data import (
     bar_to_record,
     build_manifest,
@@ -116,7 +121,9 @@ def _backtest(args: argparse.Namespace) -> None:
         if args.strategy == "price-acceleration"
         else None
     )
-    contracts = load_resolved_contracts(args.contracts)
+    contracts = select_resolved_contracts(
+        load_resolved_contracts(args.contracts), app.symbols
+    )
     portfolio_config = (
         load_portfolio_config(app.symbols, args.config_dir)
         if args.strategy == "portfolio-momentum"
@@ -170,7 +177,9 @@ def _trade(args: argparse.Namespace) -> None:
     runtime = runtime_from_environment()
     if runtime.mode != args.command:
         raise ValueError(f"TRADING_MODE must be {args.command} for this command")
-    contracts = load_resolved_contracts(args.contracts)
+    contracts = select_resolved_contracts(
+        load_resolved_contracts(args.contracts), app.symbols
+    )
     config = build_trading_node_config(
         runtime=runtime,
         contracts=contracts,

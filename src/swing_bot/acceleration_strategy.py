@@ -12,7 +12,7 @@ from nautilus_trader.model.enums import OrderSide, TimeInForce, TrailingOffsetTy
 from nautilus_trader.model.events import OrderFilled, PositionClosed
 from nautilus_trader.model.identifiers import InstrumentId
 
-from swing_bot.acceleration import AccelerationTracker
+from swing_bot.acceleration import AccelerationTracker, SessionLossGuard
 from swing_bot.config import PriceAccelerationSettings
 from swing_bot.risk import calculate_position_size, evaluate_entry_risk
 from swing_bot.signals import Signal
@@ -85,6 +85,9 @@ class PriceAccelerationStrategy(SwingReversalStrategy):
         )
         self._strategy_settings = self._acceleration_settings
         self._trackers: dict[InstrumentId, AccelerationTracker] = {}
+        self._loss_guard = SessionLossGuard(
+            self._acceleration_settings.max_consecutive_losses_per_instrument
+        )
 
     def on_bar(self, bar: NautilusBar) -> None:
         if bar.bar_type not in self._signal_bar_types:
@@ -105,6 +108,14 @@ class PriceAccelerationStrategy(SwingReversalStrategy):
         )
         if not positions and not is_entry_session(
             timestamp_ns, self._acceleration_settings.market_open_delay_minutes
+        ):
+            tracker.reset_session()
+            return
+        session_date = datetime.fromtimestamp(
+            timestamp_ns / 1_000_000_000, tz=UTC
+        ).astimezone(NEW_YORK).date()
+        if not positions and not self._loss_guard.entry_allowed(
+            str(instrument_id), session_date
         ):
             tracker.reset_session()
             return
@@ -229,4 +240,14 @@ class PriceAccelerationStrategy(SwingReversalStrategy):
         tracker = self._trackers.get(event.instrument_id)
         if tracker is not None:
             tracker.position_closed(event.ts_event)
+        position = self.cache.position(event.position_id)
+        if position is not None:
+            realized_pnl = position.realized_pnl
+            self._loss_guard.record_close(
+                str(event.instrument_id),
+                datetime.fromtimestamp(
+                    event.ts_event / 1_000_000_000, tz=UTC
+                ).astimezone(NEW_YORK).date(),
+                realized_pnl.as_double() if realized_pnl is not None else 0.0,
+            )
         super().on_position_closed(event)

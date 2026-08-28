@@ -1,5 +1,4 @@
 symbols = [
-	"NBIS",
 	"INTC",
 
 	# Communication Services
@@ -7,7 +6,6 @@ symbols = [
 	"META",
 
 	# Consumer Discretionary
-	"AMZN",
 	"TSLA",
 
 	# Consumer Staples

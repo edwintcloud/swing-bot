@@ -1,9 +1,7 @@
 [sectors]
-NBIS = "Information Technology"
 INTC = "Information Technology"
 GOOGL = "Communication Services"
 META = "Communication Services"
-AMZN = "Consumer Discretionary"
 TSLA = "Consumer Discretionary"
 WMT = "Consumer Staples"
 COST = "Consumer Staples"

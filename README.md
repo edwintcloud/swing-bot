@@ -222,6 +222,13 @@ five-second-bar strategy. Its parameters in
 not validated evidence of profitability or live execution quality. IB supplies these
 bars natively, avoiding the account-level tick-by-tick subscription ceiling.
 
+Before changing acceleration parameters, download complete regular-hours five-second
+sessions into an isolated catalog and run `tools/optimize_acceleration.py` with the last
+sessions held out for validation. The screen reuses the production signal state machine
+and includes adverse slippage and per-share commissions. Promote only parameter regions
+that remain positive across multiple chronological development and validation sessions;
+do not select a setting from one day's top result.
+
 On startup it reconciles broker orders and positions, obtains USD `NetLiquidation`, and
 requests 500 calendar days of hourly history before subscribing to live bars. It will not
 rebalance until every configured instrument has reached the weekly synchronization point.

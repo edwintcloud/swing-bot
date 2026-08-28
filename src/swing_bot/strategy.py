@@ -144,6 +144,9 @@ class SwingReversalStrategy(Strategy):
             if config.dashboard_runtime_path
             else None
         )
+        self._persisted_risk_references = (
+            self._dashboard.read_state().get("risk_references") if self._dashboard else None
+        )
         self._paused = self._dashboard.paused if self._dashboard else False
 
     def on_start(self) -> None:
@@ -422,6 +425,9 @@ class SwingReversalStrategy(Strategy):
             equity=equity,
             positions=positions,
             status=status,
+            risk_references=(
+                self._equity_references.to_dict() if self._equity_references else None
+            ),
         )
 
     def _portfolio_snapshot(self, timestamp_ns: int) -> PortfolioSnapshot | None:
@@ -474,7 +480,17 @@ class SwingReversalStrategy(Strategy):
             )
         timestamp = datetime.fromtimestamp(timestamp_ns / 1_000_000_000, tz=UTC)
         if self._equity_references is None:
-            self._equity_references = EquityReferences.initialize(equity, timestamp)
+            if isinstance(self._persisted_risk_references, dict):
+                try:
+                    self._equity_references = EquityReferences.from_dict(
+                        self._persisted_risk_references
+                    )
+                    self._equity_references.update(equity, timestamp)
+                except (KeyError, TypeError, ValueError):
+                    self._equity_references = EquityReferences.initialize(equity, timestamp)
+            else:
+                self._equity_references = EquityReferences.initialize(equity, timestamp)
+            self._persisted_risk_references = None
         else:
             self._equity_references.update(
                 equity,

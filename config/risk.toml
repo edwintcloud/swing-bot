@@ -1,8 +1,8 @@
-risk_per_trade = 0.032
-maximum_position_fraction = 0.64
+risk_per_trade = 0.005
+maximum_position_fraction = 0.30
 maximum_positions = 2
-maximum_gross_exposure = 1.28
-maximum_short_exposure = 1.28
+maximum_gross_exposure = 0.60
+maximum_short_exposure = 0.30
 daily_loss_limit = 0.015
 weekly_loss_limit = 0.03
 maximum_drawdown = 0.08

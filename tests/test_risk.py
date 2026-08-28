@@ -62,6 +62,19 @@ class EntryRiskTests(unittest.TestCase):
         self.assertEqual(references.equity, 110_000)
         self.assertEqual(references.high_water_equity, 100_000)
 
+    def test_equity_references_round_trip_for_restart(self) -> None:
+        references = EquityReferences.initialize(
+            100_000, datetime(2026, 8, 28, 14, tzinfo=UTC)
+        )
+        references.update(98_750, datetime(2026, 8, 28, 15, tzinfo=UTC))
+
+        restored = EquityReferences.from_dict(references.to_dict())
+
+        self.assertEqual(restored.day_start_equity, 100_000)
+        self.assertEqual(restored.week_start_equity, 100_000)
+        self.assertEqual(restored.high_water_equity, 100_000)
+        self.assertEqual(restored.equity, 98_750)
+
     def test_entry_within_limits_is_allowed(self) -> None:
         decision = evaluate_entry_risk(
             snapshot=snapshot(gross_exposure=0.10), proposed_notional=10_000, is_short=False

@@ -1,6 +1,7 @@
 import unittest
+from datetime import date
 
-from swing_bot.acceleration import NS_PER_SECOND, AccelerationTracker
+from swing_bot.acceleration import NS_PER_SECOND, AccelerationTracker, SessionLossGuard
 from swing_bot.config import PriceAccelerationSettings
 from swing_bot.signals import Signal
 
@@ -50,6 +51,22 @@ class AccelerationTrackerTests(unittest.TestCase):
     def test_deceleration_does_not_enter_after_velocity_reverses(self) -> None:
         result = self.update_returns([0.0, 0.02, 0.05, -0.01])
         self.assertEqual(result.signal, Signal.NONE)
+
+    def test_deceleration_requires_minimum_directional_velocity(self) -> None:
+        tracker = AccelerationTracker(
+            PriceAccelerationSettings(
+                acceleration_threshold=0.02,
+                minimum_velocity=0.07,
+                deceleration_threshold=0.01,
+            )
+        )
+        close = 100.0
+        result = tracker.update(close, 0)
+        for second, value in enumerate((0.0, 0.02, 0.05, 0.06), start=1):
+            close *= 1.0 + value
+            result = tracker.update(close, second * NS_PER_SECOND)
+        self.assertEqual(result.signal, Signal.NONE)
+        self.assertEqual(result.reason, "waiting for deceleration")
 
     def test_setup_expires_at_boundary(self) -> None:
         self.update_returns([0.0, 0.02])
@@ -102,6 +119,28 @@ class AccelerationTrackerTests(unittest.TestCase):
         self.update_returns([0.0, 0.0, 0.0, 0.02])
         result = self.update_returns([0.05])
         self.assertEqual(result.reason, "LONG setup armed")
+
+
+class SessionLossGuardTests(unittest.TestCase):
+    def test_instrument_is_blocked_after_consecutive_losses(self) -> None:
+        guard = SessionLossGuard(2)
+        session = date(2026, 8, 28)
+        guard.record_close("NBIS.NASDAQ", session, -10.0)
+        self.assertTrue(guard.entry_allowed("NBIS.NASDAQ", session))
+        guard.record_close("NBIS.NASDAQ", session, -5.0)
+        self.assertFalse(guard.entry_allowed("NBIS.NASDAQ", session))
+        self.assertTrue(guard.entry_allowed("INTC.NASDAQ", session))
+
+    def test_win_and_new_session_reset_loss_streak(self) -> None:
+        guard = SessionLossGuard(2)
+        first_session = date(2026, 8, 28)
+        guard.record_close("NBIS.NASDAQ", first_session, -10.0)
+        guard.record_close("NBIS.NASDAQ", first_session, 2.0)
+        guard.record_close("NBIS.NASDAQ", first_session, -5.0)
+        self.assertTrue(guard.entry_allowed("NBIS.NASDAQ", first_session))
+        guard.record_close("NBIS.NASDAQ", first_session, -5.0)
+        self.assertFalse(guard.entry_allowed("NBIS.NASDAQ", first_session))
+        self.assertTrue(guard.entry_allowed("NBIS.NASDAQ", date(2026, 8, 29)))
 
 
 if __name__ == "__main__":

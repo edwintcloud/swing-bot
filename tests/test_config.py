@@ -17,11 +17,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(
             config.symbols,
             (
-                "NBIS",
                 "INTC",
                 "GOOGL",
                 "META",
-                "AMZN",
                 "TSLA",
                 "WMT",
                 "COST",
@@ -41,19 +39,22 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(portfolio.settings.momentum_lookback, 252)
         self.assertEqual(portfolio.settings.target_gross_exposure, 0.80)
-        self.assertEqual(portfolio.sectors["NBIS"], "Information Technology")
+        self.assertEqual(portfolio.sectors["INTC"], "Information Technology")
         self.assertEqual(set(portfolio.sectors), set(app.symbols))
 
     def test_price_acceleration_configuration_is_isolated(self) -> None:
         settings = load_price_acceleration_config()
         self.assertEqual(settings.bar_interval_seconds, 5)
-        self.assertEqual(settings.acceleration_threshold, 0.00002)
-        self.assertEqual(settings.deceleration_threshold, 0.00001)
+        self.assertEqual(settings.acceleration_threshold, 0.00001)
+        self.assertEqual(settings.minimum_velocity, 0.0001)
+        self.assertEqual(settings.deceleration_threshold, 0.0000075)
         self.assertEqual(settings.flatline_threshold, 0.000004)
         self.assertEqual(settings.acceleration_confirmation_bars, 2)
         self.assertEqual(settings.flatline_bars, 3)
-        self.assertEqual(settings.trailing_stop_fraction, 0.0015)
+        self.assertEqual(settings.trailing_stop_fraction, 0.004)
+        self.assertEqual(settings.cooldown_seconds, 300)
         self.assertEqual(settings.market_open_delay_minutes, 15)
+        self.assertEqual(settings.max_consecutive_losses_per_instrument, 2)
 
     def test_acceleration_deceleration_cannot_exceed_arm_threshold(self) -> None:
         with self.assertRaisesRegex(ValueError, "deceleration_threshold"):
@@ -65,8 +66,12 @@ class ConfigTests(unittest.TestCase):
     def test_acceleration_noise_filters_are_validated(self) -> None:
         with self.assertRaisesRegex(ValueError, "acceleration_confirmation_bars"):
             PriceAccelerationSettings(acceleration_confirmation_bars=0)
+        with self.assertRaisesRegex(ValueError, "minimum_velocity"):
+            PriceAccelerationSettings(minimum_velocity=-0.01)
         with self.assertRaisesRegex(ValueError, "market_open_delay_minutes"):
             PriceAccelerationSettings(market_open_delay_minutes=390)
+        with self.assertRaisesRegex(ValueError, "max_consecutive_losses_per_instrument"):
+            PriceAccelerationSettings(max_consecutive_losses_per_instrument=0)
 
     def test_unknown_strategy_key_is_rejected(self) -> None:
         with TemporaryDirectory() as directory_name:

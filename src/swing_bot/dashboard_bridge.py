@@ -80,6 +80,7 @@ class DashboardBridge:
         equity: float | None,
         positions: list[dict[str, Any]],
         status: str,
+        risk_references: dict[str, object] | None = None,
     ) -> None:
         state = {
             "updated_at": _iso_timestamp(timestamp_ns),
@@ -89,6 +90,8 @@ class DashboardBridge:
             "positions": positions,
             "last_command": self.last_command,
         }
+        if risk_references is not None:
+            state["risk_references"] = risk_references
         _atomic_json(self.state_path, state)
         if equity is not None:
             bucket = timestamp_ns // 60_000_000_000

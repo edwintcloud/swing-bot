@@ -33,15 +33,17 @@ class StrategySettings:
 @dataclass(frozen=True)
 class PriceAccelerationSettings:
     bar_interval_seconds: int = 5
-    acceleration_threshold: float = 0.00002
+    acceleration_threshold: float = 0.00001
+    minimum_velocity: float = 0.0001
     acceleration_confirmation_bars: int = 2
-    deceleration_threshold: float = 0.00001
+    deceleration_threshold: float = 0.0000075
     flatline_threshold: float = 0.000004
     flatline_bars: int = 3
-    trailing_stop_fraction: float = 0.0015
+    trailing_stop_fraction: float = 0.004
     setup_expiry_seconds: int = 10
-    cooldown_seconds: int = 5
+    cooldown_seconds: int = 300
     market_open_delay_minutes: int = 15
+    max_consecutive_losses_per_instrument: int = 2
 
     def __post_init__(self) -> None:
         if self.bar_interval_seconds <= 0:
@@ -56,6 +58,8 @@ class PriceAccelerationSettings:
             raise ValueError("Acceleration thresholds and trailing stop must be between zero and one")
         if self.deceleration_threshold > self.acceleration_threshold:
             raise ValueError("deceleration_threshold cannot exceed acceleration_threshold")
+        if not 0 <= self.minimum_velocity < 1:
+            raise ValueError("minimum_velocity must be non-negative and less than one")
         if self.acceleration_confirmation_bars <= 0:
             raise ValueError("acceleration_confirmation_bars must be positive")
         if self.flatline_bars <= 0:
@@ -64,6 +68,8 @@ class PriceAccelerationSettings:
             raise ValueError("Setup expiry must be positive and cooldown cannot be negative")
         if not 0 <= self.market_open_delay_minutes < 390:
             raise ValueError("market_open_delay_minutes must be between zero and 389")
+        if self.max_consecutive_losses_per_instrument <= 0:
+            raise ValueError("max_consecutive_losses_per_instrument must be positive")
 
 
 @dataclass(frozen=True)

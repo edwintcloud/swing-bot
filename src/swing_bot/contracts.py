@@ -135,3 +135,13 @@ def load_resolved_contracts(path: Path | str) -> tuple[ResolvedContract, ...]:
     if len({contract.symbol for contract in contracts}) != len(contracts):
         raise ValueError("Resolved contract symbols must be unique")
     return contracts
+
+
+def select_resolved_contracts(
+    contracts: Sequence[ResolvedContract], symbols: Sequence[str]
+) -> tuple[ResolvedContract, ...]:
+    by_symbol = {contract.symbol: contract for contract in contracts}
+    missing = [symbol for symbol in symbols if symbol not in by_symbol]
+    if missing:
+        raise ValueError(f"Resolved contract file is missing configured symbols: {', '.join(missing)}")
+    return tuple(by_symbol[symbol] for symbol in symbols)

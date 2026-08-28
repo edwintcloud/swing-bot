@@ -8,6 +8,7 @@ from swing_bot.contracts import (
     load_resolved_contracts,
     resolve_instruments,
     save_resolved_contracts,
+    select_resolved_contracts,
 )
 
 
@@ -66,6 +67,23 @@ class ContractTests(unittest.TestCase):
     def test_missing_contract_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "MU=0"):
             resolve_instruments(["MU"], [])
+
+    def test_selects_only_configured_contracts_in_universe_order(self) -> None:
+        contracts = (
+            ResolvedContract("AMZN", "AMZN.NASDAQ", 1, "NASDAQ"),
+            ResolvedContract("TSLA", "TSLA.NASDAQ", 2, "NASDAQ"),
+            ResolvedContract("INTC", "INTC.NASDAQ", 3, "NASDAQ"),
+        )
+
+        selected = select_resolved_contracts(contracts, ("INTC", "TSLA"))
+
+        self.assertEqual([contract.symbol for contract in selected], ["INTC", "TSLA"])
+
+    def test_missing_configured_contract_is_rejected(self) -> None:
+        contracts = (ResolvedContract("INTC", "INTC.NASDAQ", 3, "NASDAQ"),)
+
+        with self.assertRaisesRegex(ValueError, "missing configured symbols: TSLA"):
+            select_resolved_contracts(contracts, ("INTC", "TSLA"))
 
     def test_incomplete_identity_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "con_id"):
