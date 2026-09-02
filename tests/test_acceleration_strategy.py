@@ -18,17 +18,19 @@ class AccelerationEntryPlanTests(unittest.TestCase):
     def setUp(self) -> None:
         self.settings = PriceAccelerationSettings(trailing_stop_fraction=0.0015)
 
-    def test_long_uses_trailing_distance_for_initial_risk(self) -> None:
+    def test_long_signal_builds_short_entry_plan(self) -> None:
         plan = build_acceleration_entry_plan(Signal.LONG, 100.0, self.settings)
         self.assertIsNotNone(plan)
         assert plan is not None
-        self.assertAlmostEqual(plan.initial_stop_price, 99.85)
+        self.assertEqual(plan.signal, Signal.SHORT)
+        self.assertAlmostEqual(plan.initial_stop_price, 100.15)
 
-    def test_short_uses_trailing_distance_for_initial_risk(self) -> None:
+    def test_short_signal_builds_long_entry_plan(self) -> None:
         plan = build_acceleration_entry_plan(Signal.SHORT, 100.0, self.settings)
         self.assertIsNotNone(plan)
         assert plan is not None
-        self.assertAlmostEqual(plan.initial_stop_price, 100.15)
+        self.assertEqual(plan.signal, Signal.LONG)
+        self.assertAlmostEqual(plan.initial_stop_price, 99.85)
 
     def test_no_signal_has_no_entry_plan(self) -> None:
         self.assertIsNone(

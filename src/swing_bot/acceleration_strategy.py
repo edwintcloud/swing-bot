@@ -41,9 +41,10 @@ def build_acceleration_entry_plan(
         return None
     if entry_price <= 0:
         raise ValueError("entry_price must be positive")
-    direction = -1.0 if signal is Signal.LONG else 1.0
+    entry_signal = Signal.SHORT if signal is Signal.LONG else Signal.LONG
+    direction = -1.0 if entry_signal is Signal.LONG else 1.0
     stop = entry_price * (1.0 + direction * settings.trailing_stop_fraction)
-    return AccelerationEntryPlan(signal, entry_price, stop)
+    return AccelerationEntryPlan(entry_signal, entry_price, stop)
 
 
 def is_flatline_exit_order(order: Any) -> bool:

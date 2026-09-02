@@ -97,7 +97,11 @@ def replay_session(
         if signal is Signal.NONE:
             if evaluation.signal is Signal.NONE:
                 continue
-            signal = evaluation.signal
+            signal = (
+                Signal.SHORT
+                if evaluation.signal is Signal.LONG
+                else Signal.LONG
+            )
             direction = 1.0 if signal is Signal.LONG else -1.0
             entry_price = bar.close * (1.0 + direction * SLIPPAGE_FRACTION)
             opened_ns = bar.timestamp_ns
